@@ -8,6 +8,8 @@
 #include <tactility/bindings/esp32_uart.h>
 #include <bindings/bmi270.h>
 #include <bindings/m5pm1.h>
+#include <tactility/bindings/esp32_sdspi.h>
+#include <tactility/bindings/display_placeholder.h>
 
 / {
 	compatible = "root";
@@ -53,6 +55,10 @@
 		host = <SPI2_HOST>;
 		pin-mosi = <&gpio0 39 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 40 GPIO_FLAG_NONE>;
+	
+		display {
+			compatible = "display-placeholder";
+		};
 	};
 
 	//DIY SD Card - https://wiki.bruce.computer/wiring-diagrams/m5sticks3/sd-card/
@@ -62,6 +68,12 @@
 		pin-mosi = <&gpio0 6 GPIO_FLAG_NONE>;
 		pin-miso = <&gpio0 4 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 5 GPIO_FLAG_NONE>;
+	
+		sdcard {
+			compatible = "espressif,esp32-sdspi";
+			pin-cs = <&gpio0 7 GPIO_FLAG_NONE>;
+			frequency-khz = <20000>;
+		};
 	};
 
 	// Speaker and microphone (ES8311)

@@ -1,4 +1,3 @@
-#include "devices/SdCard.h"
 #include "devices/Display.h"
 
 #include <Tactility/hal/Configuration.h>
@@ -12,7 +11,6 @@ static bool initBoot() {
 static tt::hal::DeviceVector createDevices() {
     return {
         createDisplay(),
-        createSdCard()
     };
 }
 

@@ -1,5 +1,4 @@
 #include "devices/Display.h"
-#include "devices/SdCard.h"
 #include "devices/Power.h"
 #include <driver/gpio.h>
 
@@ -104,7 +103,6 @@ static DeviceVector createDevices() {
         createPower(),
         ButtonControl::createTwoButtonControl(11, 12), // top button, side button
         createDisplay(),
-        createSdCard()
     };
 }
 

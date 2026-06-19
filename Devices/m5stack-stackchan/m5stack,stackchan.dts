@@ -12,6 +12,8 @@
 #include <bindings/bm8563.h>
 #include <bindings/ina226.h>
 #include <bindings/py32ioexpander.h>
+#include <tactility/bindings/esp32_sdspi.h>
+#include <tactility/bindings/display_placeholder.h>
 
 // Reference: https://docs.m5stack.com/en/StackChan
 / {
@@ -113,6 +115,16 @@
 		pin-mosi = <&gpio0 37 GPIO_FLAG_NONE>;
 		pin-miso = <&gpio0 35 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 36 GPIO_FLAG_NONE>;
+	
+		sdcard {
+			compatible = "espressif,esp32-sdspi";
+			pin-cs = <&gpio0 4 GPIO_FLAG_NONE>;
+			frequency-khz = <20000>;
+		};
+	
+		display {
+			compatible = "display-placeholder";
+		};
 	};
 
 	// AW88298 speaker + ES7210 microphone

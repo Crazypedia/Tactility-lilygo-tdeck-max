@@ -8,6 +8,8 @@
 #include <tactility/bindings/esp32_i2s.h>
 #include <tactility/bindings/esp32_spi.h>
 #include <tactility/bindings/esp32_uart.h>
+#include <tactility/bindings/esp32_sdspi.h>
+#include <tactility/bindings/display_placeholder.h>
 
 // Reference: https://wiki.lilygo.cc/get_started/en/Wearable/T-Deck-Plus/T-Deck-Plus.html#Pin-Overview
 / {
@@ -45,6 +47,16 @@
 		pin-mosi = <&gpio0 41 GPIO_FLAG_NONE>;
 		pin-miso = <&gpio0 38 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 40 GPIO_FLAG_NONE>;
+	
+		sdcard {
+			compatible = "espressif,esp32-sdspi";
+			pin-cs = <&gpio0 39 GPIO_FLAG_NONE>;
+			frequency-khz = <20000>;
+		};
+	
+		display {
+			compatible = "display-placeholder";
+		};
 	};
 
 	uart0 {

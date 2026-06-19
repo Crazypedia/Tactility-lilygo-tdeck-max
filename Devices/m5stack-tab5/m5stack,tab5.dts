@@ -13,6 +13,7 @@
 #include <bindings/ina226.h>
 #include <bindings/pi4ioe5v6408.h>
 #include <bindings/rx8130ce.h>
+#include <tactility/bindings/esp32_sdspi.h>
 
 / {
 	compatible = "root";
@@ -78,12 +79,18 @@
 		pin-scl = <&gpio0 1 GPIO_FLAG_PULL_UP>;
 	};
 
-	sdcard_spi: spi0 {
+	spi0 {
 		compatible = "espressif,esp32-spi";
 		host = <SPI2_HOST>;
 		pin-mosi = <&gpio0 44 GPIO_FLAG_NONE>;
 		pin-miso = <&gpio0 39 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 43 GPIO_FLAG_NONE>;
+	
+		sdcard {
+			compatible = "espressif,esp32-sdspi";
+			pin-cs = <&gpio0 42 GPIO_FLAG_NONE>;
+			frequency-khz = <20000>;
+		};
 	};
 
 	// ES8388 and ES7210

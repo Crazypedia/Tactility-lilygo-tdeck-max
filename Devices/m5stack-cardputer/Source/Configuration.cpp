@@ -1,5 +1,4 @@
 #include "devices/Display.h"
-#include "devices/SdCard.h"
 #include "devices/CardputerEncoder.h"
 #include "devices/CardputerKeyboard.h"
 #include "devices/CardputerPower.h"
@@ -16,7 +15,6 @@ static bool initBoot() {
 
 static DeviceVector createDevices() {
     return {
-        createSdCard(),
         createDisplay(),
         std::make_shared<CardputerKeyboard>(),
         std::make_shared<CardputerEncoder>(),

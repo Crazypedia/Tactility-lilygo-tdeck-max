@@ -249,6 +249,13 @@ void device_for_each(void* callback_context, bool(*on_device)(struct Device* dev
 void device_for_each_child(struct Device* device, void* callback_context, bool(*on_device)(struct Device* device, void* context));
 
 /**
+ * @brief Get the number of child devices.
+ * @param[in] device non-null device pointer
+ * @return the number of children
+ */
+size_t device_get_child_count(struct Device* device);
+
+/**
  * Iterate through all the known devices of a specific type
  *
  * @param[in] type the type to filter

@@ -1,7 +1,6 @@
 #include "devices/Display.h"
 #include "devices/KeyboardBacklight.h"
 #include "devices/Power.h"
-#include "devices/Sdcard.h"
 #include "devices/TdeckKeyboard.h"
 #include "devices/TrackballDevice.h"
 
@@ -23,7 +22,6 @@ static std::vector<std::shared_ptr<tt::hal::Device>> createDevices() {
         std::make_shared<TdeckKeyboard>(i2c_internal),
         std::make_shared<KeyboardBacklightDevice>(),
         std::make_shared<TrackballDevice>(),
-        createSdCard()
     };
 }
 

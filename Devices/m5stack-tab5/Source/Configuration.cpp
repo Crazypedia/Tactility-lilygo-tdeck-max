@@ -1,5 +1,4 @@
 #include "devices/Display.h"
-#include "devices/SdCard.h"
 #include "devices/Power.h"
 #include "devices/Tab5Keyboard.h"
 
@@ -17,7 +16,6 @@ static DeviceVector createDevices() {
     return {
         createPower(),
         createDisplay(),
-        createSdCard(),
         std::make_shared<Tab5Keyboard>(i2c2)
     };
 }

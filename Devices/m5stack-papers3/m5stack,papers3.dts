@@ -7,6 +7,7 @@
 #include <tactility/bindings/esp32_spi.h>
 #include <bindings/bmi270.h>
 #include <bindings/bm8563.h>
+#include <tactility/bindings/esp32_sdspi.h>
 
 / {
 	compatible = "root";
@@ -46,5 +47,11 @@
 		pin-miso = <&gpio0 40 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 39 GPIO_FLAG_NONE>;
 		max-transfer-size = <4096>;
+	
+		sdcard {
+			compatible = "espressif,esp32-sdspi";
+			pin-cs = <&gpio0 47 GPIO_FLAG_NONE>;
+			frequency-khz = <20000>;
+		};
 	};
 };

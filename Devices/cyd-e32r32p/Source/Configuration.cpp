@@ -1,4 +1,3 @@
-#include "devices/SdCard.h"
 #include "devices/Display.h"
 #include "devices/Power.h"
 #include <driver/gpio.h>
@@ -17,7 +16,6 @@ static tt::hal::DeviceVector createDevices() {
     return {
         createPower(),
         createDisplay(),
-        createSdCard()
     };
 }
 
