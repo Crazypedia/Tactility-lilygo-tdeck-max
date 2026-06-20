@@ -1,6 +1,5 @@
 #include "InitBoot.h"
 #include "devices/Display.h"
-#include <driver/gpio.h>
 
 #include <Tactility/hal/Configuration.h>
 #include <Axp2101Power.h>

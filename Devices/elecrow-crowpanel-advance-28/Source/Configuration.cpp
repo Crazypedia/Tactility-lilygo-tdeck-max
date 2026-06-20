@@ -1,6 +1,5 @@
 #include "PwmBacklight.h"
 #include "devices/Display.h"
-#include <driver/gpio.h>
 
 #include <Tactility/hal/Configuration.h>
 

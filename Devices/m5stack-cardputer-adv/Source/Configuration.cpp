@@ -1,7 +1,6 @@
 #include "devices/Display.h"
 #include "devices/CardputerKeyboard.h"
 #include "devices/CardputerPower.h"
-#include <driver/gpio.h>
 
 #include <tactility/device.h>
 #include <Tactility/hal/Configuration.h>

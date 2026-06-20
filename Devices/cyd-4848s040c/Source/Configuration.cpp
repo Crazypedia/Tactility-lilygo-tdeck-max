@@ -1,9 +1,6 @@
 #include "devices/St7701Display.h"
-#include <driver/gpio.h>
 
 #include <Tactility/hal/Configuration.h>
-#include <Tactility/kernel/SystemEvents.h>
-#include <Tactility/lvgl/LvglSync.h>
 #include <PwmBacklight.h>
 
 using namespace tt::hal;

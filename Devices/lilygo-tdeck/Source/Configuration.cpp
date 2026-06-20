@@ -5,7 +5,6 @@
 #include "devices/TrackballDevice.h"
 
 #include <Tactility/hal/Configuration.h>
-#include <Tactility/lvgl/LvglSync.h>
 #include <tactility/check.h>
 #include <tactility/device.h>
 

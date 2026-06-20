@@ -1,6 +1,5 @@
 #include "devices/Display.h"
 #include "devices/Power.h"
-#include <driver/gpio.h>
 
 #include <tactility/device.h>
 #include <tactility/drivers/i2c_controller.h>
