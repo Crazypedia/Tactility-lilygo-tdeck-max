@@ -25,7 +25,7 @@ static const generic_device_config_dt test_device_0_config = {
 
 static struct Device test_device_0 = {
 	.address = 0,
-	.name = "test-device@0",
+	.name = "test-device",
 	.config = &test_device_0_config,
 	.parent = &root,
 	.internal = NULL
@@ -40,6 +40,7 @@ static const bool_device_config_dt bool_test_device_config = {
 };
 
 static struct Device bool_test_device = {
+	.address = 0,
 	.name = "bool-test-device",
 	.config = &bool_test_device_config,
 	.parent = &root,
