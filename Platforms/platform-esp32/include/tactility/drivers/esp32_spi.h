@@ -23,6 +23,8 @@ struct Esp32SpiConfig {
     struct GpioPinSpec pin_hd;
     /** Data transfer size limit in bytes. 0 means the platform decides the limit. */
     int max_transfer_size;
+    /** Null-terminated array of chip select GPIO pin specs */
+    struct GpioPinSpec cs_gpios[];
 };
 
 #ifdef __cplusplus

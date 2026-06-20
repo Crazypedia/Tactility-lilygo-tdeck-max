@@ -34,5 +34,9 @@ properties:
     type: int
     default: 0
     description: |
-      Data transfer size limit in bytes. 
+      Data transfer size limit in bytes.
       0 means the platform decides the limit.
+  cs-gpios:
+    type: phandle-array
+    default: { 0 }
+    description: Null-terminated array of chip select GPIO pin specs for peripherals on this bus
