@@ -10,6 +10,7 @@
 #include <tactility/drivers/esp32_spi.h>
 #include <tactility/drivers/gpio_descriptor.h>
 #include <tactility/drivers/spi_controller.h>
+#include <tactility/drivers/sdcard.h>
 #include <tactility/filesystem/file_system.h>
 #include <tactility/log.h>
 
@@ -165,7 +166,7 @@ Driver esp32_sdspi_driver = {
     .start_device = start,
     .stop_device = stop,
     .api = nullptr,
-    .device_type = nullptr,
+    .device_type = &SDCARD_TYPE,
     .owner = &platform_esp32_module,
     .internal = nullptr
 };

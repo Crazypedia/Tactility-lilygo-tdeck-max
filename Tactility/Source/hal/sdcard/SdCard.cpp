@@ -1,12 +1,11 @@
-#include "Tactility/hal/sdcard/SdCardDevice.h"
-
 #include <Tactility/lvgl/LvglSync.h>
 
 #include <tactility/device.h>
+#include <tactility/drivers/sdcard.h>
 #include <tactility/filesystem/file_system.h>
 
-#include <cstring>
 #include <string>
+#include <memory>
 
 namespace tt::hal::sdcard {
 
@@ -36,6 +35,16 @@ std::shared_ptr<Lock> findSdCardLock(const std::string& path) {
     });
 
     return ctx.result;
+}
+
+void mountAll() {
+    device_for_each_of_type(&SDCARD_TYPE, nullptr, [](::Device* device, void*) -> bool {
+        if (!device_is_ready(device)) {
+            if (device_start(device) != ERROR_NONE) {
+            }
+        }
+        return true;
+    });
 }
 
 }
