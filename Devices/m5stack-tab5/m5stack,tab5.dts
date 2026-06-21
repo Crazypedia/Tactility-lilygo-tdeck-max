@@ -13,7 +13,6 @@
 #include <bindings/ina226.h>
 #include <bindings/pi4ioe5v6408.h>
 #include <bindings/rx8130ce.h>
-#include <tactility/bindings/esp32_sdspi.h>
 
 / {
 	compatible = "root";
