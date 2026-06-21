@@ -11,7 +11,7 @@ extern "C" {
 struct Esp32SdspiConfig;
 typedef void* Esp32SdspiHandle;
 
-Esp32SdspiHandle esp32_sdspi_fs_alloc(const struct Esp32SdspiConfig* config, int spi_host, const char* mount_path);
+Esp32SdspiHandle esp32_sdspi_fs_alloc(const struct Esp32SdspiConfig* config, int spi_host, int cs_pin, const char* mount_path);
 void esp32_sdspi_fs_free(Esp32SdspiHandle handle);
 sdmmc_card_t* esp32_sdspi_fs_get_card(Esp32SdspiHandle handle);
 

@@ -5,20 +5,16 @@ compatible: "espressif,esp32-sdspi"
 bus: spi
 
 properties:
-  pin-cs:
-    type: phandle-array
-    required: true
-    description: Chip select GPIO
   pin-cd:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
     description: Card detect GPIO
   pin-wp:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
     description: Write protect GPIO
   pin-int:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
     description: Interrupt GPIO
   frequency-khz:

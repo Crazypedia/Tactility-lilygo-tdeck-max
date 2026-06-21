@@ -8,6 +8,7 @@
 #include <tactility/bindings/esp32_spi.h>
 #include <tactility/bindings/esp32_uart.h>
 #include <tactility/bindings/esp32_sdspi.h>
+#include <tactility/bindings/display_placeholder.h>
 
 / {
 	compatible = "root";
@@ -64,13 +65,13 @@
 	spi1 {
 		compatible = "espressif,esp32-spi";
 		host = <SPI3_HOST>;
+		cs-gpios = <&gpio0 10 GPIO_FLAG_NONE>;
 		pin-mosi = <&gpio0 11 GPIO_FLAG_NONE>;
 		pin-miso = <&gpio0 13 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 12 GPIO_FLAG_NONE>;
 	
-		sdcard {
+		sdcard@0 {
 			compatible = "espressif,esp32-sdspi";
-			pin-cs = <&gpio0 10 GPIO_FLAG_NONE>;
 			frequency-khz = <20000>;
 		};
 	};

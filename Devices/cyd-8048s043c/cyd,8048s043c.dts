@@ -45,9 +45,8 @@
 		pin-miso = <&gpio0 13 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 12 GPIO_FLAG_NONE>;
 	
-		sdcard {
+		sdcard@0 {
 			compatible = "espressif,esp32-sdspi";
-			pin-cs = <&gpio0 10 GPIO_FLAG_NONE>;
 			frequency-khz = <20000>;
 		};
 	};

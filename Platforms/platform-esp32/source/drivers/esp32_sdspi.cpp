@@ -24,7 +24,6 @@ struct Esp32SdspiInternal {
     RecursiveMutex mutex = {};
     Esp32SdspiHandle fs_handle = nullptr;
     FileSystem* file_system = nullptr;
-    GpioDescriptor* pin_cs_descriptor = nullptr;
     GpioDescriptor* pin_cd_descriptor = nullptr;
     GpioDescriptor* pin_wp_descriptor = nullptr;
     GpioDescriptor* pin_int_descriptor = nullptr;
@@ -40,7 +39,6 @@ struct Esp32SdspiInternal {
     }
 
     void cleanup_pins() {
-        release_pin(&pin_cs_descriptor);
         release_pin(&pin_cd_descriptor);
         release_pin(&pin_wp_descriptor);
         release_pin(&pin_int_descriptor);
@@ -68,7 +66,6 @@ static error_t start(Device* device) {
     auto* config = GET_CONFIG(device);
 
     bool pins_ok =
-        acquire_pin_or_set_null(config->pin_cs, &data->pin_cs_descriptor) &&
         acquire_pin_or_set_null(config->pin_cd, &data->pin_cd_descriptor) &&
         acquire_pin_or_set_null(config->pin_wp, &data->pin_wp_descriptor) &&
         acquire_pin_or_set_null(config->pin_int, &data->pin_int_descriptor);
@@ -82,8 +79,25 @@ static error_t start(Device* device) {
         return ERROR_RESOURCE;
     }
 
+    GpioPinSpec cs_pin_spec;
+    if (esp32_spi_get_cs_pin(device, &cs_pin_spec) != ERROR_NONE) {
+        LOG_E(TAG, "Failed to get CS pin from parent SPI controller");
+        data->cleanup_pins();
+        device_set_driver_data(device, nullptr);
+        data->unlock();
+        delete data;
+        return ERROR_RESOURCE;
+    }
+
     auto* spi_config = static_cast<const Esp32SpiConfig*>(parent->config);
-    data->fs_handle = esp32_sdspi_fs_alloc(config, spi_config->host, "/sdcard");
+
+    // Lower all CS pins
+    esp32_spi_deselect_all_cs(parent);
+    // Manually set the CS pin fo
+    gpio_set_direction(static_cast<gpio_num_t>(cs_pin_spec.pin), GPIO_MODE_OUTPUT);
+    gpio_set_level(static_cast<gpio_num_t>(cs_pin_spec.pin), 255);
+
+    data->fs_handle = esp32_sdspi_fs_alloc(config, spi_config->host, cs_pin_spec.pin, "/sdcard");
     if (!data->fs_handle) {
         data->cleanup_pins();
         device_set_driver_data(device, nullptr);

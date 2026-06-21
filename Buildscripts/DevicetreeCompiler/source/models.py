@@ -39,6 +39,7 @@ class BindingProperty:
     required: bool
     description: str
     default: object = None
+    element_type: str = None
 
 @dataclass
 class Binding:

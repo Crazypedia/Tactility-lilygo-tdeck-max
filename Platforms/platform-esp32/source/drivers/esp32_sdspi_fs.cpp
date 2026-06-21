@@ -17,12 +17,14 @@ struct Esp32SdspiFsData {
     const std::string mount_path;
     const Esp32SdspiConfig* config;
     int spi_host;
+    int cs_pin;
     sdmmc_card_t* card;
 
-    Esp32SdspiFsData(const Esp32SdspiConfig* config, int spi_host, const std::string& mount_path) :
+    Esp32SdspiFsData(const Esp32SdspiConfig* config, int spi_host, int cs_pin, const std::string& mount_path) :
         mount_path(mount_path),
         config(config),
         spi_host(spi_host),
+        cs_pin(cs_pin),
         card(nullptr)
     {}
 };
@@ -34,8 +36,8 @@ static gpio_num_t to_native_pin(GpioPinSpec pin_spec) {
 
 extern "C" {
 
-Esp32SdspiHandle esp32_sdspi_fs_alloc(const Esp32SdspiConfig* config, int spi_host, const char* mount_path) {
-    return new(std::nothrow) Esp32SdspiFsData(config, spi_host, mount_path);
+Esp32SdspiHandle esp32_sdspi_fs_alloc(const Esp32SdspiConfig* config, int spi_host, int cs_pin, const char* mount_path) {
+    return new(std::nothrow) Esp32SdspiFsData(config, spi_host, cs_pin, mount_path);
 }
 
 void esp32_sdspi_fs_free(Esp32SdspiHandle handle) {
@@ -62,7 +64,7 @@ static error_t mount(void* data) {
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.host_id = static_cast<spi_host_device_t>(fs_data->spi_host);
-    slot_config.gpio_cs = to_native_pin(config->pin_cs);
+    slot_config.gpio_cs = static_cast<gpio_num_t>(fs_data->cs_pin);
     slot_config.gpio_cd = to_native_pin(config->pin_cd);
     slot_config.gpio_wp = to_native_pin(config->pin_wp);
     slot_config.gpio_int = to_native_pin(config->pin_int);

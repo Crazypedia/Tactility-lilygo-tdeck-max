@@ -9,7 +9,6 @@ extern "C" {
 #endif
 
 struct Esp32SdspiConfig {
-    struct GpioPinSpec pin_cs;
     struct GpioPinSpec pin_cd;
     struct GpioPinSpec pin_wp;
     struct GpioPinSpec pin_int;

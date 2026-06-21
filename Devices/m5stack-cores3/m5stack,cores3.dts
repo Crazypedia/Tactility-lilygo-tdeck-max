@@ -86,7 +86,6 @@
 	
 		sdcard@0 {
 			compatible = "espressif,esp32-sdspi";
-			pin-cs = <&gpio0 4 GPIO_FLAG_NONE>;
 			frequency-khz = <20000>;
 		};
 	

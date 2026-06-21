@@ -1,9 +1,5 @@
-description: SPI peripheral with chip select
+description: SPI peripheral
 
 compatible: "spi-peripheral"
 
-properties:
-  pin-cs:
-    type: phandle-array
-    required: true
-    description: Chip select GPIO
+properties: {}

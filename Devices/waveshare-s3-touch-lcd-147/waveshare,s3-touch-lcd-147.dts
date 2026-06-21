@@ -6,6 +6,7 @@
 #include <tactility/bindings/esp32_i2c.h>
 #include <tactility/bindings/esp32_spi.h>
 #include <tactility/bindings/esp32_sdspi.h>
+#include <tactility/bindings/display_placeholder.h>
 
 // Reference: https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-1.47
 / {
@@ -44,13 +45,13 @@
 	spi1 {
 		compatible = "espressif,esp32-spi";
 		host = <SPI3_HOST>;
+		cs-gpios = <&gpio0 14 GPIO_FLAG_NONE>;
 		pin-mosi = <&gpio0 15 GPIO_FLAG_NONE>;
 		pin-miso = <&gpio0 17 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 16 GPIO_FLAG_NONE>;
 	
-		sdcard {
+		sdcard@0 {
 			compatible = "espressif,esp32-sdspi";
-			pin-cs = <&gpio0 14 GPIO_FLAG_NONE>;
 			frequency-khz = <20000>;
 		};
 	};

@@ -49,9 +49,8 @@
 		pin-sclk = <&gpio0 39 GPIO_FLAG_NONE>;
 		max-transfer-size = <4096>;
 	
-		sdcard {
+		sdcard@0 {
 			compatible = "espressif,esp32-sdspi";
-			pin-cs = <&gpio0 47 GPIO_FLAG_NONE>;
 			frequency-khz = <20000>;
 		};
 	};

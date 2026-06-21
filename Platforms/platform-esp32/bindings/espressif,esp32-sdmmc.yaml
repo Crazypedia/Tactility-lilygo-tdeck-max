@@ -4,40 +4,40 @@ compatible: "espressif,esp32-sdmmc"
 
 properties:
   pin-clk:
-    type: phandle-array
+    type: phandles
     required: true
   pin-cmd:
-    type: phandle-array
+    type: phandles
     required: true
   pin-d0:
-    type: phandle-array
+    type: phandles
     required: true
   pin-d1:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-d2:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-d3:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-d4:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-d5:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-d6:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-d7:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-cd:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   pin-wp:
-    type: phandle-array
+    type: phandles
     default: GPIO_PIN_SPEC_NONE
   bus-width:
     type: int
