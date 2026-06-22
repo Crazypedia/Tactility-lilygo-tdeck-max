@@ -31,6 +31,7 @@ macro(tactility_project project_name)
         pi4ioe5v6408-module
         qmi8658-module
         rx8130ce-module
+        xl9555-module
     )
 
 endmacro()
