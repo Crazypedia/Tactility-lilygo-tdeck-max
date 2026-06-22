@@ -2,8 +2,10 @@
 
 #include <Cst3530Touch.h>
 #include <Gdeq031t10Display.h>
-#include <tactility/check.h>
+#include <Tactility/Logger.h>
 #include <tactility/device.h>
+
+static const auto LOGGER = tt::Logger("TdeckmaxDisplay");
 
 // Pins and I2C address from Xinyuan-LilyGO/T-Deck-MAX's
 // lib/TDeckMaxBoard/src/TDeckMaxBoard.h and docs/pinmap.md.
@@ -17,7 +19,10 @@ constexpr uint16_t TOUCH_I2C_ADDRESS = 0x1A;
 
 static std::shared_ptr<tt::hal::touch::TouchDevice> createTouch() {
     auto* i2c = device_find_by_name("i2c0");
-    check(i2c);
+    if (i2c == nullptr) {
+        LOGGER.error("i2c0 not found, booting without touch");
+        return nullptr;
+    }
 
     // The vendor reference driver leaves the touch reset pin undriven
     // (it's wired through the XL9555 expander, not a native GPIO).
