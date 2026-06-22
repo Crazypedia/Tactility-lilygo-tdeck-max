@@ -78,7 +78,6 @@ private:
     std::unique_ptr<uint8_t[]> renderFramebuffer;
     bool initialized = false;
     bool powered = false;
-    bool deepInitDone = false;
     RefreshMode currentRefreshMode = RefreshMode::Full;
 
     void writeCommand(uint8_t command);
@@ -91,7 +90,6 @@ private:
     void initFast();
     void initSlow();
     void initPartial();
-    void ensureInitialized(RefreshMode mode);
 
     void powerOff();
     void refresh();

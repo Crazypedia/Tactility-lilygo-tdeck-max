@@ -1,0 +1,45 @@
+/dts-v1/;
+
+#include <tactility/bindings/root.h>
+#include <tactility/bindings/esp32_ble.h>
+#include <tactility/bindings/esp32_gpio.h>
+#include <tactility/bindings/esp32_i2c.h>
+#include <tactility/bindings/esp32_spi.h>
+#include <bindings/xl9555.h>
+
+// Reference: https://github.com/Xinyuan-LilyGO/T-Deck-MAX
+// lib/TDeckMaxBoard/src/TDeckMaxBoard.h, docs/pinmap.md
+/ {
+	compatible = "lilygo,tdeckmax";
+	model = "LilyGO T-Deck Pro Max";
+
+	ble0 {
+		compatible = "espressif,esp32-ble";
+	};
+
+	gpio0 {
+		compatible = "espressif,esp32-gpio";
+		gpio-count = <49>;
+	};
+
+	i2c0 {
+		compatible = "espressif,esp32-i2c";
+		port = <I2C_NUM_0>;
+		clock-frequency = <100000>;
+		pin-sda = <&gpio0 13 GPIO_FLAG_NONE>;
+		pin-scl = <&gpio0 14 GPIO_FLAG_NONE>;
+
+		xl9555 {
+			compatible = "xlsemi,xl9555";
+			reg = <0x20>;
+		};
+	};
+
+	spi0 {
+		compatible = "espressif,esp32-spi";
+		host = <SPI2_HOST>;
+		pin-mosi = <&gpio0 33 GPIO_FLAG_NONE>;
+		pin-miso = <&gpio0 47 GPIO_FLAG_NONE>;
+		pin-sclk = <&gpio0 36 GPIO_FLAG_NONE>;
+	};
+};
