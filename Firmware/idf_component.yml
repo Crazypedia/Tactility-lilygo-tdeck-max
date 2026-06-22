@@ -27,6 +27,7 @@ dependencies:
   espressif/esp_lcd_touch_cst816s: "1.0.3"
   espressif/esp_lcd_touch_gt911: "1.1.3"
   espressif/esp_lcd_touch_ft5x06: "1.0.6~1"
+  waveshare/esp_lcd_touch_cst3530: "1.0.0"
   espressif/esp_io_expander: "1.0.1"
   espressif/esp_io_expander_tca95xx_16bit: "1.0.1"
   espressif/esp_lcd_axs15231b: "2.0.2"
