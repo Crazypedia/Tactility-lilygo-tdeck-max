@@ -136,10 +136,11 @@ def write_core_variables(output_file, device_properties: ConfigParser):
     output_file.write("# Target\n")
     output_file.write(f"CONFIG_IDF_TARGET=\"{idf_target}\"\n")
     output_file.write("# CPU\n")
-    output_file.write("CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y\n")
-    output_file.write("CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240\n")
-    output_file.write(f"CONFIG_{idf_target.upper()}_DEFAULT_CPU_FREQ_240=y\n")
-    output_file.write(f"CONFIG_{idf_target.upper()}_DEFAULT_CPU_FREQ_MHZ=240\n")
+    cpu_freq = get_property_or_default(device_properties, "hardware", "cpuFreq", "240")
+    output_file.write(f"CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_{cpu_freq}=y\n")
+    output_file.write(f"CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ={cpu_freq}\n")
+    output_file.write(f"CONFIG_{idf_target.upper()}_DEFAULT_CPU_FREQ_{cpu_freq}=y\n")
+    output_file.write(f"CONFIG_{idf_target.upper()}_DEFAULT_CPU_FREQ_MHZ={cpu_freq}\n")
     if idf_target != "esp32": # Not available on original ESP32
         output_file.write("# Enable usage of MALLOC_CAP_EXEC on IRAM:\n")
         output_file.write("CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n\n")
@@ -163,7 +164,7 @@ def write_flash_variables(output_file, device_properties: ConfigParser):
     flash_size_number = flash_size[:-2]
     output_file.write(f"CONFIG_ESPTOOLPY_FLASHSIZE_{flash_size_number}MB=y\n")
     flash_mode = get_property_or_default(device_properties, "hardware", "flashMode", 'QIO')
-    output_file.write(f"CONFIG_FLASHMODE_{flash_mode}=y\n")
+    output_file.write(f"CONFIG_ESPTOOLPY_FLASHMODE_{flash_mode}=y\n")
     esptool_flash_freq = get_property_or_none(device_properties, "hardware", "esptoolFlashFreq")
     if esptool_flash_freq is not None:
         output_file.write(f"CONFIG_ESPTOOLPY_FLASHFREQ_{esptool_flash_freq}=y\n")
