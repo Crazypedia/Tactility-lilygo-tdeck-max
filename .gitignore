@@ -26,3 +26,5 @@ sdkconfig.board.*.dev
 
 .caveman.json
 .ai/mcp
+# Local ESP-IDF install
+.espressif/
