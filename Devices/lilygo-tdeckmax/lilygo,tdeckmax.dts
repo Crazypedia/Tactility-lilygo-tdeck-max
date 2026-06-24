@@ -3,7 +3,7 @@
 #include <tactility/bindings/root.h>
 #include <tactility/bindings/esp32_ble.h>
 #include <tactility/bindings/esp32_gpio.h>
-#include <tactility/bindings/esp32_i2c.h>
+#include <tactility/bindings/esp32_i2c_master.h>
 #include <tactility/bindings/esp32_spi.h>
 #include <bindings/xl9555.h>
 
@@ -23,7 +23,9 @@
 	};
 
 	i2c0 {
-		compatible = "espressif,esp32-i2c";
+		// i2c-master (not the legacy i2c driver): the esp_lcd_touch_cst3530
+		// component reads the panel through the new i2c-master bus handle.
+		compatible = "espressif,esp32-i2c-master";
 		port = <I2C_NUM_0>;
 		clock-frequency = <100000>;
 		pin-sda = <&gpio0 13 GPIO_FLAG_NONE>;

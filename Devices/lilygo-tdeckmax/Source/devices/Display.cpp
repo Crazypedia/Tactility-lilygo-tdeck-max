@@ -1,6 +1,6 @@
 #include "Display.h"
+#include "Cst66xxTouch.h"
 
-#include <Cst3530Touch.h>
 #include <Gdeq031t10Display.h>
 #include <Tactility/Logger.h>
 #include <tactility/device.h>
@@ -14,7 +14,6 @@ constexpr auto EPD_PIN_CS = GPIO_NUM_34;
 constexpr auto EPD_PIN_DC = GPIO_NUM_35;
 constexpr auto EPD_PIN_RST = GPIO_NUM_9;
 constexpr auto EPD_PIN_BUSY = GPIO_NUM_37;
-constexpr auto TOUCH_PIN_INT = GPIO_NUM_12;
 constexpr uint16_t TOUCH_I2C_ADDRESS = 0x1A;
 
 static std::shared_ptr<tt::hal::touch::TouchDevice> createTouch() {
@@ -24,23 +23,20 @@ static std::shared_ptr<tt::hal::touch::TouchDevice> createTouch() {
         return nullptr;
     }
 
-    // The vendor reference driver leaves the touch reset pin undriven
-    // (it's wired through the XL9555 expander, not a native GPIO).
-    auto configuration = std::make_unique<Cst3530Touch::Configuration>(
-        i2c,
-        Gdeq031t10Display::WIDTH,
-        Gdeq031t10Display::HEIGHT,
-        false,
-        false,
-        false,
-        GPIO_NUM_NC,
-        TOUCH_PIN_INT,
-        0,
-        0,
-        TOUCH_I2C_ADDRESS
-    );
+    // The touch reset line is released earlier via the XL9555 expander (see
+    // Configuration.cpp). Orientation flags are starting guesses; adjust after
+    // checking on hardware.
+    const Cst66xxTouch::Configuration configuration = {
+        .i2cController = i2c,
+        .address = TOUCH_I2C_ADDRESS,
+        .width = Gdeq031t10Display::WIDTH,
+        .height = Gdeq031t10Display::HEIGHT,
+        .swapXy = false,
+        .mirrorX = false,
+        .mirrorY = false,
+    };
 
-    return std::make_shared<Cst3530Touch>(std::move(configuration));
+    return std::make_shared<Cst66xxTouch>(configuration);
 }
 
 std::shared_ptr<tt::hal::display::DisplayDevice> createDisplay() {

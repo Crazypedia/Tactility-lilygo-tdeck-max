@@ -28,7 +28,7 @@ static constexpr char keymap_lc[KB_ROWS][KB_COLS] = {
     {'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'},
     {'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', LV_KEY_BACKSPACE},
     {'\0', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '$', LV_KEY_ENTER},
-    {'\0', '\0', '\0', '\0', '\0', LV_KEY_UP, '0', ' ', '\0', LV_KEY_UP}
+    {'\0', '\0', '\0', '\0', '\0', LV_KEY_PREV, '0', ' ', '\0', LV_KEY_NEXT}
 };
 
 // Uppercase layer (ALT held or caps toggled)
@@ -36,7 +36,7 @@ static constexpr char keymap_uc[KB_ROWS][KB_COLS] = {
     {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'},
     {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', LV_KEY_BACKSPACE},
     {'\0', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '$', LV_KEY_ENTER},
-    {'\0', '\0', '\0', '\0', '\0', LV_KEY_UP, '0', ' ', '\0', LV_KEY_UP}
+    {'\0', '\0', '\0', '\0', '\0', LV_KEY_PREV, '0', ' ', '\0', LV_KEY_NEXT}
 };
 
 // Symbol layer (SYM held). The T-Deck Max silkscreen for the symbol layer is
@@ -46,7 +46,7 @@ static constexpr char keymap_sy[KB_ROWS][KB_COLS] = {
     {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
     {'@', '#', '+', '-', '*', '/', '(', ')', '_', LV_KEY_BACKSPACE},
     {'\0', '!', '?', ';', ':', '\'', '"', ',', '.', LV_KEY_ENTER},
-    {'\0', '\0', '\0', '\0', '\0', LV_KEY_UP, '0', ' ', '\0', LV_KEY_UP}
+    {'\0', '\0', '\0', '\0', '\0', LV_KEY_PREV, '0', ' ', '\0', LV_KEY_NEXT}
 };
 
 void TdeckmaxKeyboard::readCallback(lv_indev_t* indev, lv_indev_data_t* data) {
