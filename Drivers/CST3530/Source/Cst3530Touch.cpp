@@ -14,7 +14,21 @@
 static const auto LOGGER = tt::Logger("CST3530");
 
 bool Cst3530Touch::createIoHandle(esp_lcd_panel_io_handle_t& outHandle) {
-    esp_lcd_panel_io_i2c_config_t io_config = ESP_LCD_TOUCH_IO_I2C_CST3530_CONFIG();
+    // The component's ESP_LCD_TOUCH_IO_I2C_CST3530_CONFIG() macro lists designated
+    // initializers out of declaration order, which is an error in C++. Build the
+    // same configuration here in the correct order instead.
+    esp_lcd_panel_io_i2c_config_t io_config = {
+        .dev_addr = ESP_LCD_TOUCH_IO_I2C_CST3530_ADDRESS,
+        .control_phase_bytes = 1,
+        .dc_bit_offset = 0,
+        .lcd_cmd_bits = 8,
+        .flags = {
+            .disable_control_phase = 1,
+        },
+        // scl_speed_hz is only set for the new i2c-master driver below. The
+        // legacy esp_lcd i2c driver rejects a non-zero value and derives the
+        // clock from the bus configuration instead.
+    };
 
     auto* i2c = configuration->i2cController;
 
@@ -33,6 +47,7 @@ bool Cst3530Touch::createIoHandle(esp_lcd_panel_io_handle_t& outHandle) {
         return esp_lcd_new_panel_io_i2c_v1(port, &io_config, &outHandle) == ESP_OK;
     } else if (driver_is_compatible(driver, "espressif,esp32-i2c-master")) {
         auto bus = esp32_i2c_master_get_bus_handle(i2c);
+        io_config.scl_speed_hz = 100000;
         return esp_lcd_new_panel_io_i2c_v2(bus, &io_config, &outHandle) == ESP_OK;
     }
 

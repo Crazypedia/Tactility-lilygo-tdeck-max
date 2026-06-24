@@ -65,6 +65,9 @@ public:
     static constexpr uint16_t WIDTH = 240;
     static constexpr uint16_t HEIGHT = 320;
     static constexpr size_t FRAMEBUFFER_SIZE = (WIDTH * HEIGHT) / 8; // 1 bpp packed
+    // LVGL 9 stores a 2-colour palette (2 x lv_color32_t = 8 bytes) at the start
+    // of an LV_COLOR_FORMAT_I1 buffer, before the packed 1bpp bitmap.
+    static constexpr size_t LVGL_I1_PALETTE_SIZE = 8;
 
 private:
 

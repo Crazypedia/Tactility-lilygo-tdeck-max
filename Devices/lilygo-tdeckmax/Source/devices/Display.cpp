@@ -51,7 +51,11 @@ std::shared_ptr<tt::hal::display::DisplayDevice> createDisplay() {
         EPD_PIN_RST,
         EPD_PIN_BUSY,
         createTouch(),
-        10'000'000
+        10'000'000,
+        // Default to a fast (~1s) refresh. A full (~3s) refresh holds the LVGL
+        // lock long enough that GuiService's 5s lock timeout trips when several
+        // refreshes queue up, leaving app content undrawn.
+        Gdeq031t10Display::RefreshMode::Fast
     );
 
     return std::make_shared<Gdeq031t10Display>(std::move(configuration));

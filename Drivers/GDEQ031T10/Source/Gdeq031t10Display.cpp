@@ -5,6 +5,7 @@
 #include <cstring>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <themes/mono/lv_theme_mono.h>
 
 static const auto LOGGER = tt::Logger("GDEQ031T10");
 
@@ -112,11 +113,21 @@ void Gdeq031t10Display::refresh() {
             break;
     }
 
+    // The packed 1bpp bitmap LVGL rendered lives after the I1 palette header.
+    const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
+
+    // LVGL's I1 bit polarity is inverted relative to the panel (the controller
+    // treats 1 as black, LVGL packs 1 as the lighter colour), so invert before
+    // sending. shadowFramebuffer keeps the panel-polarity copy of the last frame
+    // for the controller's old/new differential refresh.
     writeCommand(CMD_DATA_START_OLD);
     writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE);
+
+    for (size_t i = 0; i < FRAMEBUFFER_SIZE; i++) {
+        shadowFramebuffer[i] = static_cast<uint8_t>(~renderBitmap[i]);
+    }
     writeCommand(CMD_DATA_START_NEW);
-    writeData(renderFramebuffer.get(), FRAMEBUFFER_SIZE);
-    std::memcpy(shadowFramebuffer.get(), renderFramebuffer.get(), FRAMEBUFFER_SIZE);
+    writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE);
 
     writeCommand(CMD_DISPLAY_REFRESH);
     vTaskDelay(pdMS_TO_TICKS(1)); // datasheet requires >=200us settle before polling BUSY
@@ -173,9 +184,10 @@ bool Gdeq031t10Display::start() {
     }
 
     shadowFramebuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
-    renderFramebuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
+    // LVGL needs room for the 8-byte I1 palette ahead of the 1bpp bitmap.
+    renderFramebuffer = std::make_unique<uint8_t[]>(LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE);
     std::memset(shadowFramebuffer.get(), 0xFF, FRAMEBUFFER_SIZE);
-    std::memset(renderFramebuffer.get(), 0xFF, FRAMEBUFFER_SIZE);
+    std::memset(renderFramebuffer.get(), 0xFF, LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE);
 
     currentRefreshMode = configuration->defaultRefreshMode;
     initFull();
@@ -233,8 +245,14 @@ bool Gdeq031t10Display::startLvgl() {
 
     lv_display_set_user_data(lvglDisplay, this);
     lv_display_set_color_format(lvglDisplay, LV_COLOR_FORMAT_I1);
+
+    // The default colour theme renders accent-coloured text/icons that threshold
+    // to near-invisible on a 1bpp panel. Apply LVGL's monochrome theme (light
+    // background, dark foreground) so UI content shows as solid black on white.
+    lv_theme_t* theme = lv_theme_mono_init(lvglDisplay, false, LV_FONT_DEFAULT);
+    lv_display_set_theme(lvglDisplay, theme);
     lv_display_set_render_mode(lvglDisplay, LV_DISPLAY_RENDER_MODE_FULL);
-    lv_display_set_buffers(lvglDisplay, renderFramebuffer.get(), nullptr, FRAMEBUFFER_SIZE, LV_DISPLAY_RENDER_MODE_FULL);
+    lv_display_set_buffers(lvglDisplay, renderFramebuffer.get(), nullptr, LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE, LV_DISPLAY_RENDER_MODE_FULL);
     lv_display_set_flush_cb(lvglDisplay, flushCallback);
 
     return true;

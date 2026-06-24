@@ -10,7 +10,7 @@
 // Reference: https://github.com/Xinyuan-LilyGO/T-Deck-MAX
 // lib/TDeckMaxBoard/src/TDeckMaxBoard.h, docs/pinmap.md
 / {
-	compatible = "lilygo,tdeckmax";
+	compatible = "root";
 	model = "LilyGO T-Deck Pro Max";
 
 	ble0 {
@@ -41,5 +41,8 @@
 		pin-mosi = <&gpio0 33 GPIO_FLAG_NONE>;
 		pin-miso = <&gpio0 47 GPIO_FLAG_NONE>;
 		pin-sclk = <&gpio0 36 GPIO_FLAG_NONE>;
+		// The EPD pushes its whole 9600-byte framebuffer in one SPI write, which
+		// exceeds the default ~4 KB transfer limit. Raise the bus limit to fit it.
+		max-transfer-size = <65536>;
 	};
 };
