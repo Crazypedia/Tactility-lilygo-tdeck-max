@@ -48,6 +48,10 @@
 
 ## Medium Priority
 
+- Enable accelerometer for T-Deck Pro Max
+- Enable GPS module for T-Deck Pro Max
+- Assess T-Deck Pro Max hardware feature set against Tactility's existing testing tools and consider expanding core tools or creating a T-Deck Pro Max ELF app for testing
+- RTC? check for real time clock and auto syncing clock when on wifi
 - Filtering for apps in App Hub:
   - apps that only work on a specific device
 - Diceware app has large "+" and "-' buttons on Cardputer. It should be smaller.
