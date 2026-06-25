@@ -1,4 +1,5 @@
 #include "devices/Display.h"
+#include "devices/Sdcard.h"
 #include "devices/TdeckmaxKeyboard.h"
 #include "devices/TdeckmaxPower.h"
 
@@ -82,7 +83,8 @@ static DeviceVector createDevices() {
     auto* i2c = device_find_by_name("i2c0");
 
     DeviceVector devices = {
-        createDisplay()
+        createDisplay(),
+        createSdCard()
     };
 
     if (i2c != nullptr) {
