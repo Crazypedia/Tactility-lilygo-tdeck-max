@@ -1,4 +1,5 @@
 #include "devices/Display.h"
+#include "devices/Radio.h"
 #include "devices/Sdcard.h"
 #include "devices/TdeckmaxKeyboard.h"
 #include "devices/TdeckmaxPower.h"
@@ -10,6 +11,7 @@
 #include <tactility/delay.h>
 #include <tactility/device.h>
 #include <tactility/drivers/gpio_controller.h>
+#include <tactility/log.h>
 
 using namespace tt::hal;
 
@@ -24,6 +26,13 @@ constexpr auto SD_PIN_CS = GPIO_NUM_48;
 // lib/TDeckMaxBoard/src/TDeckMaxBoard.h). Both are active low.
 constexpr auto XL9555_PIN_TOUCH_RST = 7; // P07
 constexpr auto XL9555_PIN_KEY_RST = 9;   // P11
+
+// LoRa power and antenna control, also via the XL9555 (vendor TDeckMaxBoard.h).
+// LORA_EN must be HIGH to power the SX1262; LORA_SEL HIGH selects the internal
+// antenna (LOW = external). The XL9555 latches the output level, so the level
+// persists after the descriptor is released.
+constexpr auto XL9555_PIN_LORA_EN = 1;  // P01: HIGH enables SX1262 power
+constexpr auto XL9555_PIN_LORA_SEL = 4; // P04: HIGH = internal antenna
 
 // Release the touch and keyboard reset lines held by the XL9555. Without this
 // the touch controller may stay in a half-powered state and the keyboard's
@@ -60,6 +69,21 @@ static void initIoExpander() {
         gpio_descriptor_release(key_rst);
     }
 
+    // Power up the SX1262 and select the internal antenna. Without LORA_EN high
+    // the radio is unpowered and won't enumerate on the SPI bus.
+    auto* lora_en = gpio_descriptor_acquire(xl9555, XL9555_PIN_LORA_EN, GPIO_OWNER_GPIO);
+    auto* lora_sel = gpio_descriptor_acquire(xl9555, XL9555_PIN_LORA_SEL, GPIO_OWNER_GPIO);
+    if (lora_en != nullptr) {
+        gpio_descriptor_set_flags(lora_en, GPIO_FLAG_DIRECTION_OUTPUT);
+        gpio_descriptor_set_level(lora_en, true);
+        gpio_descriptor_release(lora_en);
+    }
+    if (lora_sel != nullptr) {
+        gpio_descriptor_set_flags(lora_sel, GPIO_FLAG_DIRECTION_OUTPUT);
+        gpio_descriptor_set_level(lora_sel, true);
+        gpio_descriptor_release(lora_sel);
+    }
+
     delay_millis(60);
 }
 
@@ -75,6 +99,13 @@ static bool initBoot() {
     gpio_set_level(LORA_PIN_CS, 1);
     gpio_set_level(SD_PIN_CS, 1);
 
+    // The SX1262 DIO1 line uses a per-pin GPIO ISR (LevelInterruptHandler), which
+    // needs the shared ISR service. INVALID_STATE means it's already installed.
+    esp_err_t isr_result = gpio_install_isr_service(0);
+    if (isr_result != ESP_OK && isr_result != ESP_ERR_INVALID_STATE) {
+        LOG_W("tdeckmax", "Failed to install GPIO ISR service: %s", esp_err_to_name(isr_result));
+    }
+
     initIoExpander();
     return true;
 }
@@ -84,7 +115,8 @@ static DeviceVector createDevices() {
 
     DeviceVector devices = {
         createDisplay(),
-        createSdCard()
+        createSdCard(),
+        createRadio()
     };
 
     if (i2c != nullptr) {
