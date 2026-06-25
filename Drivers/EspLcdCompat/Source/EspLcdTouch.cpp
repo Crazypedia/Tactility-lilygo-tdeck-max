@@ -52,14 +52,6 @@ bool EspLcdTouch::startLvgl(lv_disp_t* display) {
         LOGGER.warn("TouchDriver is still in use.");
     }
 
-    // A touch whose start() failed has no handle. lvgl_port_add_touch() asserts
-    // on a null handle, which would crash the whole device, so skip attaching it
-    // and let the rest of the UI come up without touch input.
-    if (touchHandle == nullptr) {
-        LOGGER.error("Touch handle not initialized, skipping LVGL attach");
-        return false;
-    }
-
     const lvgl_port_touch_cfg_t touch_cfg = {
         .disp = display,
         .handle = touchHandle,
