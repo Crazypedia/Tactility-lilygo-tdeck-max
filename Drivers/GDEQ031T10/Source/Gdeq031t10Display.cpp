@@ -6,6 +6,9 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <themes/mono/lv_theme_mono.h>
+// Full lv_theme_t definition (opaque in public lvgl.h) — needed to extend the
+// mono theme with a custom apply callback, per LVGL's theme-extension pattern.
+#include <themes/lv_theme_private.h>
 
 static const auto LOGGER = tt::Logger("GDEQ031T10");
 
@@ -237,6 +240,14 @@ void Gdeq031t10Display::flushCallback(lv_display_t* display, const lv_area_t* ar
     lv_display_flush_ready(display);
 }
 
+void Gdeq031t10Display::themeApplyCallback(lv_theme_t* /*theme*/, lv_obj_t* obj) {
+    // Keep textarea cursors solid (no blink): on e-paper each blink toggle is a
+    // panel refresh. anim_duration 0 makes lv_textarea skip the blink animation.
+    if (lv_obj_check_type(obj, &lv_textarea_class)) {
+        lv_obj_set_style_anim_duration(obj, 0, LV_PART_CURSOR);
+    }
+}
+
 bool Gdeq031t10Display::start() {
     if (initialized) {
         return true;
@@ -341,8 +352,17 @@ bool Gdeq031t10Display::startLvgl() {
     // The default colour theme renders accent-coloured text/icons that threshold
     // to near-invisible on a 1bpp panel. Apply LVGL's monochrome theme (light
     // background, dark foreground) so UI content shows as solid black on white.
-    lv_theme_t* theme = lv_theme_mono_init(lvglDisplay, false, LV_FONT_DEFAULT);
-    lv_display_set_theme(lvglDisplay, theme);
+    lv_theme_t* baseTheme = lv_theme_mono_init(lvglDisplay, false, LV_FONT_DEFAULT);
+    // Chain a theme on top of the mono theme that disables the textarea cursor
+    // blink. A blinking cursor invalidates its region ~twice a second, and on
+    // e-paper every invalidation is a panel refresh, so text-entry screens (e.g.
+    // the Wi-Fi password field) flash continuously. The mono theme still applies
+    // first (it's the parent); themeApplyCallback only pins the cursor solid.
+    static lv_theme_t epaperTheme;
+    epaperTheme = *baseTheme;
+    lv_theme_set_parent(&epaperTheme, baseTheme);
+    lv_theme_set_apply_cb(&epaperTheme, &Gdeq031t10Display::themeApplyCallback);
+    lv_display_set_theme(lvglDisplay, &epaperTheme);
     lv_display_set_render_mode(lvglDisplay, LV_DISPLAY_RENDER_MODE_FULL);
     lv_display_set_buffers(lvglDisplay, renderFramebuffer.get(), nullptr, LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE, LV_DISPLAY_RENDER_MODE_FULL);
     lv_display_set_flush_cb(lvglDisplay, flushCallback);

@@ -110,6 +110,8 @@ private:
     void refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow);
 
     static void flushCallback(lv_display_t* display, const lv_area_t* area, uint8_t* pixelMap);
+    /** Theme hook: disables the textarea cursor blink (see startLvgl). */
+    static void themeApplyCallback(lv_theme_t* theme, lv_obj_t* obj);
 
 public:
 
