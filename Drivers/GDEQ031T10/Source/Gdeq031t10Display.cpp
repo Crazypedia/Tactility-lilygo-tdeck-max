@@ -22,6 +22,7 @@ constexpr uint8_t CMD_DATA_START_NEW = 0x13;
 constexpr uint8_t CMD_VCOM_DATA_INTERVAL = 0x50;
 constexpr uint8_t CMD_PARTIAL_WINDOW = 0x90;
 constexpr uint8_t CMD_PARTIAL_IN = 0x91;
+constexpr uint8_t CMD_PARTIAL_OUT = 0x92;
 constexpr uint8_t CMD_FAST_MODE_ENABLE = 0xE0;
 constexpr uint8_t CMD_FAST_MODE_TIMING = 0xE5;
 
@@ -98,28 +99,60 @@ void Gdeq031t10Display::powerOff() {
 }
 
 void Gdeq031t10Display::refresh() {
-    switch (currentRefreshMode) {
-        case RefreshMode::Full:
-            initFull();
-            break;
-        case RefreshMode::Fast:
-            initFast();
-            break;
-        case RefreshMode::Slow:
-            initSlow();
-            break;
-        case RefreshMode::Partial:
-            initPartial();
-            break;
-    }
-
     // The packed 1bpp bitmap LVGL rendered lives after the I1 palette header.
     const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
+    constexpr int BYTES_PER_ROW = WIDTH / 8;
 
-    // LVGL's I1 bit polarity is inverted relative to the panel (the controller
-    // treats 1 as black, LVGL packs 1 as the lighter colour), so invert before
-    // sending. shadowFramebuffer keeps the panel-polarity copy of the last frame
-    // for the controller's old/new differential refresh.
+    // Find the bounding box of bytes that differ from what the panel holds. The
+    // panel stores the inverted (shadow) polarity, so compare against ~render.
+    int firstCol = BYTES_PER_ROW, lastCol = -1, firstRow = HEIGHT, lastRow = -1;
+    for (int row = 0; row < HEIGHT; row++) {
+        const size_t base = static_cast<size_t>(row) * BYTES_PER_ROW;
+        for (int col = 0; col < BYTES_PER_ROW; col++) {
+            if (static_cast<uint8_t>(~renderBitmap[base + col]) != shadowFramebuffer[base + col]) {
+                if (col < firstCol) firstCol = col;
+                if (col > lastCol) lastCol = col;
+                if (row < firstRow) firstRow = row;
+                if (row > lastRow) lastRow = row;
+            }
+        }
+    }
+
+    const bool nothingChanged = (lastCol < 0);
+    if (nothingChanged && !forceFullRefresh) {
+        return; // panel already shows this frame; don't refresh needlessly
+    }
+
+    // A change covering most of the screen, the periodic ghost-clear gate, or an
+    // explicit request all warrant a full refresh; otherwise refresh just the box.
+    const int changedRows = nothingChanged ? 0 : (lastRow - firstRow + 1);
+    const bool largeChange = changedRows > (HEIGHT * 3 / 4);
+    const bool gateExpired = partialRefreshCount >= MAX_PARTIAL_REFRESHES;
+
+    if (forceFullRefresh || gateExpired || largeChange || nothingChanged) {
+        // Explicit requests get the best-quality LUT; automatic ghost-clears use
+        // the configured (typically faster) mode.
+        refreshFull(forceFullRefresh ? RefreshMode::Full : currentRefreshMode);
+        forceFullRefresh = false;
+        partialRefreshCount = 0;
+    } else {
+        refreshWindow(firstCol, lastCol, firstRow, lastRow);
+        partialRefreshCount++;
+    }
+}
+
+void Gdeq031t10Display::refreshFull(RefreshMode mode) {
+    switch (mode) {
+        case RefreshMode::Full: initFull(); break;
+        case RefreshMode::Fast: initFast(); break;
+        case RefreshMode::Slow: initSlow(); break;
+        case RefreshMode::Partial: initPartial(); break;
+    }
+
+    const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
+
+    // shadowFramebuffer keeps the panel-polarity copy of the last frame for the
+    // controller's old/new differential refresh; LVGL's I1 polarity is inverted.
     writeCommand(CMD_DATA_START_OLD);
     writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE);
 
@@ -132,6 +165,62 @@ void Gdeq031t10Display::refresh() {
     writeCommand(CMD_DISPLAY_REFRESH);
     vTaskDelay(pdMS_TO_TICKS(1)); // datasheet requires >=200us settle before polling BUSY
     waitWhileBusy();
+
+    powerOff();
+}
+
+void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow) {
+    // Partial LUT (fast waveform via temperature force) on a sub-region only. The
+    // RAM window must be byte-aligned in X, which it already is (byte columns).
+    initPartial();
+
+    const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
+    constexpr int BYTES_PER_ROW = WIDTH / 8;
+    const int widthBytes = lastByteCol - firstByteCol + 1;
+
+    const uint16_t x = static_cast<uint16_t>(firstByteCol * 8);
+    const uint16_t xe = static_cast<uint16_t>(lastByteCol * 8 + 7);
+    const uint16_t y = static_cast<uint16_t>(firstRow);
+    const uint16_t ye = static_cast<uint16_t>(lastRow);
+
+    // Set the partial RAM window (GxEPD2 GDEQ031T10 sequence).
+    writeCommand(CMD_PARTIAL_IN);
+    writeCommand(CMD_PARTIAL_WINDOW);
+    writeData(static_cast<uint8_t>(x));
+    writeData(static_cast<uint8_t>(xe));
+    writeData(static_cast<uint8_t>(y >> 8));
+    writeData(static_cast<uint8_t>(y & 0xFF));
+    writeData(static_cast<uint8_t>(ye >> 8));
+    writeData(static_cast<uint8_t>(ye & 0xFF));
+    writeData(0x01);
+
+    // Old region: the region's current panel contents (shadow), gathered contiguously.
+    size_t n = 0;
+    for (int row = firstRow; row <= lastRow; row++) {
+        const size_t base = static_cast<size_t>(row) * BYTES_PER_ROW + firstByteCol;
+        std::memcpy(&regionBuffer[n], &shadowFramebuffer[base], widthBytes);
+        n += widthBytes;
+    }
+    writeCommand(CMD_DATA_START_OLD);
+    writeData(regionBuffer.get(), n);
+
+    // New region: inverted render, and update the shadow for this region as we go.
+    n = 0;
+    for (int row = firstRow; row <= lastRow; row++) {
+        const size_t base = static_cast<size_t>(row) * BYTES_PER_ROW + firstByteCol;
+        for (int c = 0; c < widthBytes; c++) {
+            const uint8_t value = static_cast<uint8_t>(~renderBitmap[base + c]);
+            regionBuffer[n++] = value;
+            shadowFramebuffer[base + c] = value;
+        }
+    }
+    writeCommand(CMD_DATA_START_NEW);
+    writeData(regionBuffer.get(), n);
+
+    writeCommand(CMD_DISPLAY_REFRESH);
+    vTaskDelay(pdMS_TO_TICKS(1));
+    waitWhileBusy();
+    writeCommand(CMD_PARTIAL_OUT);
 
     powerOff();
 }
@@ -186,6 +275,8 @@ bool Gdeq031t10Display::start() {
     shadowFramebuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
     // LVGL needs room for the 8-byte I1 palette ahead of the 1bpp bitmap.
     renderFramebuffer = std::make_unique<uint8_t[]>(LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE);
+    // Scratch for gathering a windowed region (worst case = the whole frame).
+    regionBuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
     std::memset(shadowFramebuffer.get(), 0xFF, FRAMEBUFFER_SIZE);
     std::memset(renderFramebuffer.get(), 0xFF, LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE);
 
@@ -208,6 +299,7 @@ bool Gdeq031t10Display::stop() {
     spiDevice = nullptr;
     shadowFramebuffer.reset();
     renderFramebuffer.reset();
+    regionBuffer.reset();
     initialized = false;
     return true;
 }
@@ -230,7 +322,7 @@ void Gdeq031t10Display::setPowerOn(bool turnOn) {
 }
 
 void Gdeq031t10Display::requestFullRefresh() {
-    currentRefreshMode = RefreshMode::Full;
+    forceFullRefresh = true;
 }
 
 bool Gdeq031t10Display::startLvgl() {

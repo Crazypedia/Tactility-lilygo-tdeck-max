@@ -82,6 +82,16 @@ private:
     bool initialized = false;
     bool powered = false;
     RefreshMode currentRefreshMode = RefreshMode::Full;
+    /** Number of windowed partial refreshes since the last full refresh. A full
+     * refresh is forced once this reaches MAX_PARTIAL_REFRESHES to clear the
+     * ghosting that partial updates accumulate. */
+    uint8_t partialRefreshCount = 0;
+    /** Forces the next refresh to be a full-screen refresh (set at boot and by
+     * requestFullRefresh). */
+    bool forceFullRefresh = true;
+    /** Scratch buffer used to gather a windowed region's bytes for one SPI write. */
+    std::unique_ptr<uint8_t[]> regionBuffer;
+    static constexpr uint8_t MAX_PARTIAL_REFRESHES = 8;
 
     void writeCommand(uint8_t command);
     void writeData(const uint8_t* data, size_t length);
@@ -96,6 +106,8 @@ private:
 
     void powerOff();
     void refresh();
+    void refreshFull(RefreshMode mode);
+    void refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow);
 
     static void flushCallback(lv_display_t* display, const lv_area_t* area, uint8_t* pixelMap);
 
