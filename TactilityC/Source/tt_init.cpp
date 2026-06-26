@@ -7,6 +7,7 @@
 #include "tt_gps.h"
 #include "tt_hal_device.h"
 #include "tt_hal_display.h"
+#include "tt_hal_radio.h"
 #include "tt_hal_touch.h"
 #include "tt_hal_uart.h"
 #include <tt_lock.h>
@@ -326,6 +327,26 @@ const esp_elfsym main_symbols[] {
     ESP_ELFSYM_EXPORT(tt_hal_uart_set_baud_rate),
     ESP_ELFSYM_EXPORT(tt_hal_uart_get_baud_rate),
     ESP_ELFSYM_EXPORT(tt_hal_uart_flush_input),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_alloc),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_free),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_get_device_id),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_get_name),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_get_desc),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_get_state),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_set_modulation),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_get_modulation),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_set_parameter),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_get_parameter),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_get_parameter_unit_str),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_can_transmit),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_can_receive),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_start),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_stop),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_transmit),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_subscribe_state),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_subscribe_receive),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_unsubscribe_receive),
+    ESP_ELFSYM_EXPORT(tt_hal_radio_unsubscribe_state),
     ESP_ELFSYM_EXPORT(tt_lvgl_is_started),
     ESP_ELFSYM_EXPORT(tt_lvgl_lock),
     ESP_ELFSYM_EXPORT(tt_lvgl_unlock),
