@@ -33,6 +33,30 @@ I2C address map observed on i2c0 (GPIO13 SDA / GPIO14 SCL, shared bus):
 - Orientation flags (swapXy/mirrorX/mirrorY) are currently all false and not yet
   validated against the panel.
 
+### Bezel touch-buttons (heart / speech-bubble / paper-airplane)
+
+The three printed buttons below the screen are **hardware touch-keys on the same
+CST66xx**, not separate GPIOs. They arrive in the normal touch frame: `buf[3]`
+high nibble = key count, and when a key is present the first slot's `buf[8]` holds
+`id = b8 & 0x0F`, `state = b8 >> 4` (non-zero = pressed). The controller reports
+keys *mutually exclusively* with finger coordinates, so a key frame never carries
+a touch point. `Cst66xxTouch::handleBezelKey` does rising-edge detection and maps
+each id to a navigation action.
+
+Confirmed key ids (left → right) and their **default** mapping:
+
+| Button | key id | Action | Call |
+|---|---|---|---|
+| ❤️ heart | 0 | Back | `tt::app::stop()` (no-op at launcher root) |
+| 💬 speech-bubble | 1 | Home | `tt::app::start("Launcher")` |
+| ✈️ paper-airplane | 2 | Recents | `tt::app::start("AppList")` |
+
+**To customise:** edit the `switch` in `Cst66xxTouch::handleBezelKey`
+(`Source/devices/Cst66xxTouch.cpp`) — change the action per `BEZEL_KEY_*` case.
+E.g. launch a specific app instead (`tt::app::start("<AppId>")`), or swap which
+icon does what. The `BEZEL_KEY_HEART/SPEECH/AIRPLANE` constants are the ids; the
+case body is the action.
+
 ## Power / charging (SY6970 + BQ27220)
 
 - Driver: `Source/devices/TdeckmaxPower.{h,cpp}`. Battery metrics via BQ27220;
@@ -115,6 +139,8 @@ battery status, power-off button. All merged to the local `main`.
   To diagnose: scan the QR, split the `s=` hex into PC addresses, `addr2line` against
   `build/Tactility.elf`. `CONFIG_ESP_TASK_WDT_PANIC=y` is active; the UART-coredump config
   did not take (needs a Kconfig choice) — use the QR, or wire coredump-to-flash if needed.
-- **Two bezel touch buttons** (heart/speech-bubble, paper-airplane) exist outside the
-  screen area — not yet handled.
 - **SD card + app-store/downloads**: not yet tested (next up).
+
+### Done since
+- **Bezel touch-buttons** (heart/speech-bubble/paper-airplane) → Back/Home/Recents.
+  See the "Bezel touch-buttons" subsection under [Touch](#touch-cst66xx).

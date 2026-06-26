@@ -1,6 +1,7 @@
 #include "Cst66xxTouch.h"
 
 #include <Tactility/Logger.h>
+#include <Tactility/app/App.h>
 #include <tactility/drivers/gpio_controller.h>
 #include <tactility/drivers/i2c_controller.h>
 
@@ -86,9 +87,10 @@ bool Cst66xxTouch::stop() {
 
 bool Cst66xxTouch::readPoint(int16_t& x, int16_t& y) {
     // CST66xx frame (cst66xx_report): write the read-point register, then read 9
-    // bytes for the first finger. buf[2]=report type (0xFF=position), buf[3] low
-    // nibble = finger count, high nibble = key count. The first point sits at
-    // buf[4..8] when there are no hardware keys (this panel has none).
+    // bytes. buf[2]=report type (0xFF=position/key), buf[3] low nibble = finger
+    // count, high nibble = key count. The first 5-byte slot (buf[4..8]) is a key
+    // slot when key count > 0, otherwise the first finger; further fingers, if
+    // any, follow at buf[index+...].
     uint8_t buf[9] = {};
     error_t err = i2c_controller_write(configuration.i2cController, configuration.address, REG_READ_POINT, sizeof(REG_READ_POINT), I2C_TIMEOUT);
     if (err == ERROR_NONE) {
@@ -104,6 +106,19 @@ bool Cst66xxTouch::readPoint(int16_t& x, int16_t& y) {
     const uint8_t reportType = buf[2];
     const uint8_t fingerCount = buf[3] & 0x0F;
     const uint8_t keyCount = (buf[3] & 0xF0) >> 4;
+
+    // Bezel touch-keys are reported in the first slot (buf[8]): low nibble = key
+    // id, high nibble = state (non-zero = pressed). The controller reports keys
+    // mutually exclusively with finger coordinates, so a key frame never carries
+    // a touch point.
+    if (reportType == 0xFF && keyCount > 0) {
+        const uint8_t keyByte = buf[8];
+        handleBezelKey(keyByte & 0x0F, (keyByte >> 4) != 0);
+        return false;
+    }
+    // No key in this frame: clear the latch so the next press fires once.
+    bezelKeyDown = false;
+
     if (reportType != 0xFF || fingerCount < 1) {
         return false;
     }
@@ -131,6 +146,41 @@ bool Cst66xxTouch::readPoint(int16_t& x, int16_t& y) {
     x = rawX;
     y = rawY;
     return true;
+}
+
+// Bezel touch-key ids as reported by the CST66xx, left to right (confirmed on
+// hardware). To re-map a button, change the action in the switch below — the
+// mapping is also documented in NOTES.md.
+static constexpr uint8_t BEZEL_KEY_HEART = 0;    // left
+static constexpr uint8_t BEZEL_KEY_SPEECH = 1;   // centre
+static constexpr uint8_t BEZEL_KEY_AIRPLANE = 2; // right
+
+void Cst66xxTouch::handleBezelKey(uint8_t keyId, bool pressed) {
+    if (!pressed) {
+        bezelKeyDown = false;
+        return;
+    }
+    if (bezelKeyDown) {
+        return; // still held; the press edge was already handled
+    }
+    bezelKeyDown = true;
+
+    LOGGER.debug("bezel key {}", keyId);
+
+    // Bezel button -> navigation action. Edit these cases to customise:
+    switch (keyId) {
+        case BEZEL_KEY_HEART: // Back: stop the current app (no-op at the launcher root)
+            tt::app::stop();
+            break;
+        case BEZEL_KEY_SPEECH: // Home: the launcher
+            tt::app::start("Launcher");
+            break;
+        case BEZEL_KEY_AIRPLANE: // Recents: the app switcher
+            tt::app::start("AppList");
+            break;
+        default:
+            break;
+    }
 }
 
 void Cst66xxTouch::readCallback(lv_indev_t* indev, lv_indev_data_t* data) {

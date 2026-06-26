@@ -43,7 +43,12 @@ private:
     lv_indev_t* indev = nullptr;
     int16_t lastX = 0;
     int16_t lastY = 0;
+    // The CST66xx also reports the three bezel touch-keys (heart / speech-bubble /
+    // paper-airplane). bezelKeyDown latches a press so we act once on the rising
+    // edge rather than every poll while the key is held.
+    bool bezelKeyDown = false;
 
     bool readPoint(int16_t& x, int16_t& y);
+    void handleBezelKey(uint8_t keyId, bool pressed);
     static void readCallback(lv_indev_t* indev, lv_indev_data_t* data);
 };
