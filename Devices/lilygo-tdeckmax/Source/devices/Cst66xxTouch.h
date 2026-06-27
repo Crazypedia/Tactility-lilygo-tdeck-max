@@ -3,10 +3,7 @@
 #include <Tactility/hal/touch/TouchDevice.h>
 #include <tactility/device.h>
 
-// Capacitive touch for the LilyGO T-Deck Max's Hynitron CST66xx controller at
-// I2C 0x1A. (The vendor docs label it "CST328", but the vendor HynTouch driver
-// probes cst66xx first and that is what answers here.) This is a minimal,
-// single-touch port of the vendor's hyn_cst66xx.c protocol for LVGL pointer input.
+// Minimal port of the CST66xx touch protocol for LVGL pointer input.
 class Cst66xxTouch final : public tt::hal::touch::TouchDevice {
 
 public:

@@ -13,20 +13,13 @@ static const auto LOGGER = tt::Logger("CST66xx");
 
 static constexpr TickType_t I2C_TIMEOUT = pdMS_TO_TICKS(20);
 
-// The protocol uses 4-byte register addresses, taken from the vendor's
-// lib/HynTouch/src/hyn_cst66xx.c.
-
-// Normal-mode setup sequence (cst66xx_set_workmode, NOMAL_MODE).
+// CST66xx protocol registers and setup sequence.
 static constexpr uint8_t CMD_DISABLE_LP_I2C[4] = {0xD0, 0x00, 0x04, 0x00};
 static constexpr uint8_t CMD_NORMAL_A[4] = {0xD0, 0x00, 0x00, 0x00};
 static constexpr uint8_t CMD_NORMAL_B[4] = {0xD0, 0x00, 0x0C, 0x00};
 static constexpr uint8_t CMD_NORMAL_C[4] = {0xD0, 0x00, 0x01, 0x00};
-// Read-point register: write these 4 bytes, then read the touch frame.
 static constexpr uint8_t REG_READ_POINT[4] = {0xD0, 0x07, 0x00, 0x00};
-// Acknowledge/clear after each read.
 static constexpr uint8_t CMD_ACK[4] = {0xD0, 0x00, 0x02, 0xAB};
-// Identity/config register (cst66xx_updata_tpinfo): read 50 bytes; buf[2]==0xCA
-// && buf[3]==0xCA confirms a CST66xx.
 static constexpr uint8_t REG_INFO[4] = {0xD0, 0x03, 0x00, 0x00};
 
 static void setNormalMode(::Device* i2c, uint8_t address) {
@@ -39,8 +32,7 @@ static void setNormalMode(::Device* i2c, uint8_t address) {
 }
 
 bool Cst66xxTouch::start() {
-    // Reset the controller (XL9555 P07, active low). The chip only re-initialises
-    // into normal reporting mode after a clean reset pulse.
+    // Pulse the reset line (XL9555 P07) to initialize the controller.
     auto* xl9555 = device_find_by_name("xl9555");
     if (xl9555 != nullptr) {
         auto* rst = gpio_descriptor_acquire(xl9555, XL9555_PIN_TOUCH_RST, GPIO_OWNER_GPIO);
@@ -85,10 +77,7 @@ bool Cst66xxTouch::stop() {
 }
 
 bool Cst66xxTouch::readPoint(int16_t& x, int16_t& y) {
-    // CST66xx frame (cst66xx_report): write the read-point register, then read 9
-    // bytes for the first finger. buf[2]=report type (0xFF=position), buf[3] low
-    // nibble = finger count, high nibble = key count. The first point sits at
-    // buf[4..8] when there are no hardware keys (this panel has none).
+    // Read the 9-byte touch frame for the first finger.
     uint8_t buf[9] = {};
     error_t err = i2c_controller_write(configuration.i2cController, configuration.address, REG_READ_POINT, sizeof(REG_READ_POINT), I2C_TIMEOUT);
     if (err == ERROR_NONE) {
