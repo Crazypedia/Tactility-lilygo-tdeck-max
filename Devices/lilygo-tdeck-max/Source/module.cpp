@@ -12,8 +12,8 @@ static error_t stop() {
     return ERROR_NONE;
 }
 
-struct Module lilygo_tdeckmax_module = {
-    .name = "lilygo-tdeckmax",
+struct Module lilygo_tdeck_max_module = {
+    .name = "lilygo-tdeck-max",
     .start = start,
     .stop = stop,
     .symbols = nullptr,

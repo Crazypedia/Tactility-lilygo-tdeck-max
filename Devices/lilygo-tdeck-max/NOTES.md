@@ -73,9 +73,10 @@ case body is the action.
 
 ## Boot / display / build gotchas
 
-- ESP-IDF lives in-repo at `.espressif/v5.5.2/esp-idf`; source `export.sh` before
+- ESP-IDF lives at the CODE workspace root: `../../.espressif/v5.5.2/esp-idf`
+  (shared across projects, not in-repo); source its `export.sh` before
   building. Do NOT use the IDE "build" button — it runs bare ninja with a stale
-  `IDF_PATH`. Flow: `python device.py lilygo-tdeckmax` → `idf.py build` →
+  `IDF_PATH`. Flow: `python device.py lilygo-tdeck-max` → `idf.py build` →
   `idf.py -p /dev/ttyACM0 flash monitor`. After `device.py` regenerates sdkconfig
   the first `idf.py build` may fail on a missing `Generated/devicetree.c` — just
   build again.
