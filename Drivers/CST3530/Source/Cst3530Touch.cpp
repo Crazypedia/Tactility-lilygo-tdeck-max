@@ -1,0 +1,82 @@
+#include "Cst3530Touch.h"
+
+#include <Tactility/Logger.h>
+
+#include <esp_lcd_io_i2c.h>
+#include <esp_lcd_touch_cst3530.h>
+#include <esp_err.h>
+#include <tactility/device.h>
+#include <tactility/driver.h>
+#include <tactility/drivers/esp32_i2c.h>
+#include <tactility/drivers/esp32_i2c_master.h>
+#include <tactility/drivers/i2c_controller.h>
+
+static const auto LOGGER = tt::Logger("CST3530");
+
+bool Cst3530Touch::createIoHandle(esp_lcd_panel_io_handle_t& outHandle) {
+    // The component's ESP_LCD_TOUCH_IO_I2C_CST3530_CONFIG() macro lists designated
+    // initializers out of declaration order, which is an error in C++. Build the
+    // same configuration here in the correct order instead.
+    esp_lcd_panel_io_i2c_config_t io_config = {
+        .dev_addr = ESP_LCD_TOUCH_IO_I2C_CST3530_ADDRESS,
+        .control_phase_bytes = 1,
+        .dc_bit_offset = 0,
+        .lcd_cmd_bits = 8,
+        .flags = {
+            .disable_control_phase = 1,
+        },
+        // scl_speed_hz is only set for the new i2c-master driver below. The
+        // legacy esp_lcd i2c driver rejects a non-zero value and derives the
+        // clock from the bus configuration instead.
+    };
+
+    auto* i2c = configuration->i2cController;
+
+    if (configuration->address != 0) {
+        io_config.dev_addr = configuration->address;
+    } else if (i2c_controller_has_device_at_address(i2c, ESP_LCD_TOUCH_IO_I2C_CST3530_ADDRESS, pdMS_TO_TICKS(10)) == ERROR_NONE) {
+        io_config.dev_addr = ESP_LCD_TOUCH_IO_I2C_CST3530_ADDRESS;
+    } else {
+        LOGGER.error("No device found on I2C bus");
+        return false;
+    }
+
+    auto* driver = device_get_driver(i2c);
+    if (driver_is_compatible(driver, "espressif,esp32-i2c")) {
+        auto port = static_cast<const Esp32I2cConfig*>(i2c->config)->port;
+        return esp_lcd_new_panel_io_i2c_v1(port, &io_config, &outHandle) == ESP_OK;
+    } else if (driver_is_compatible(driver, "espressif,esp32-i2c-master")) {
+        auto bus = esp32_i2c_master_get_bus_handle(i2c);
+        io_config.scl_speed_hz = 100000;
+        return esp_lcd_new_panel_io_i2c_v2(bus, &io_config, &outHandle) == ESP_OK;
+    }
+
+    LOGGER.error("Unsupported I2C driver");
+    return false;
+}
+
+bool Cst3530Touch::createTouchHandle(esp_lcd_panel_io_handle_t ioHandle, const esp_lcd_touch_config_t& configuration, esp_lcd_touch_handle_t& panelHandle) {
+    return esp_lcd_touch_new_i2c_cst3530(ioHandle, &configuration, &panelHandle) == ESP_OK;
+}
+
+esp_lcd_touch_config_t Cst3530Touch::createEspLcdTouchConfig() {
+    return {
+        .x_max = configuration->xMax,
+        .y_max = configuration->yMax,
+        .rst_gpio_num = configuration->pinReset,
+        .int_gpio_num = configuration->pinInterrupt,
+        .levels = {
+            .reset = configuration->pinResetLevel,
+            .interrupt = configuration->pinInterruptLevel,
+        },
+        .flags = {
+            .swap_xy = configuration->swapXy,
+            .mirror_x = configuration->mirrorX,
+            .mirror_y = configuration->mirrorY,
+        },
+        .process_coordinates = nullptr,
+        .interrupt_callback = nullptr,
+        .user_data = nullptr,
+        .driver_data = nullptr
+    };
+}
