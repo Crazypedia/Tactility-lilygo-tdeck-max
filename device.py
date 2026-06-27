@@ -163,7 +163,7 @@ def write_flash_variables(output_file, device_properties: ConfigParser):
     flash_size_number = flash_size[:-2]
     output_file.write(f"CONFIG_ESPTOOLPY_FLASHSIZE_{flash_size_number}MB=y\n")
     flash_mode = get_property_or_default(device_properties, "hardware", "flashMode", 'QIO')
-    output_file.write(f"CONFIG_FLASHMODE_{flash_mode}=y\n")
+    output_file.write(f"CONFIG_ESPTOOLPY_FLASHMODE_{flash_mode}=y\n")
     esptool_flash_freq = get_property_or_none(device_properties, "hardware", "esptoolFlashFreq")
     if esptool_flash_freq is not None:
         output_file.write(f"CONFIG_ESPTOOLPY_FLASHFREQ_{esptool_flash_freq}=y\n")
