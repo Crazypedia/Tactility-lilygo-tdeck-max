@@ -24,8 +24,7 @@ static std::shared_ptr<tt::hal::touch::TouchDevice> createTouch() {
     }
 
     // The touch reset line is released earlier via the XL9555 expander (see
-    // Configuration.cpp). Orientation flags are starting guesses; adjust after
-    // checking on hardware.
+    // Configuration.cpp).
     const Cst66xxTouch::Configuration configuration = {
         .i2cController = i2c,
         .address = TOUCH_I2C_ADDRESS,

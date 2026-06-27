@@ -13,11 +13,7 @@ constexpr auto BACKLIGHT = GPIO_NUM_42;
 constexpr auto KB_ROWS = 4;
 constexpr auto KB_COLS = 10;
 
-// Keymaps are written in the vendor's row/column orientation
-// (Xinyuan-LilyGO/T-Deck-MAX examples/factory/peri_keypad.cpp). The TCA8418
-// columns are wired in reverse, so the vendor reads keymap[row][9 - col]. We do
-// the same reversal in processKeyboard(), which keeps these tables a direct,
-// verifiable copy of the vendor layout.
+// Keymaps match the vendor layout; processKeyboard() handles column reversal.
 //
 // Modifier keys (ALT and SYM) are blanked here ('\0') and handled by position:
 //   ALT -> shift/uppercase, at vendor column 0 of row 2
@@ -39,9 +35,7 @@ static constexpr char keymap_uc[KB_ROWS][KB_COLS] = {
     {'\0', '\0', '\0', '\0', '\0', LV_KEY_PREV, '0', ' ', '\0', LV_KEY_NEXT}
 };
 
-// Symbol layer (SYM held). The T-Deck Max silkscreen for the symbol layer is
-// not documented in the vendor sources, so these are sensible defaults; adjust
-// to match the printed keys once verified on hardware.
+// Symbol layer (SYM held).
 static constexpr char keymap_sy[KB_ROWS][KB_COLS] = {
     {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
     {'@', '#', '+', '-', '*', '/', '(', ')', '_', LV_KEY_BACKSPACE},

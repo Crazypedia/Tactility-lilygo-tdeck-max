@@ -13,22 +13,15 @@
 
 using namespace tt::hal;
 
-// LoRa and SD card share the EPD's SPI bus but aren't wired up yet, so their
-// chip-select lines are left floating. Deassert them before the EPD driver
-// touches the bus, matching the vendor reference driver's own setup(), so a
-// floating CS can't make either chip latch EPD command bytes meant for it.
+// Deassert LoRa and SD card chip-selects to avoid bus interference.
 constexpr auto LORA_PIN_CS = GPIO_NUM_3;
 constexpr auto SD_PIN_CS = GPIO_NUM_48;
 
-// Reset lines routed through the XL9555 IO expander (P-numbers from the vendor
-// lib/TDeckMaxBoard/src/TDeckMaxBoard.h). Both are active low.
+// Active-low reset lines routed through the XL9555 IO expander.
 constexpr auto XL9555_PIN_TOUCH_RST = 7; // P07
 constexpr auto XL9555_PIN_KEY_RST = 9;   // P11
 
-// Release the touch and keyboard reset lines held by the XL9555. Without this
-// the touch controller may stay in a half-powered state and the keyboard's
-// TCA8418 is held in reset, so neither responds. Mirrors the vendor factory
-// firmware's XL9555 init (examples/factory/factory.ino).
+// Release the touch and keyboard reset lines held by the XL9555.
 static void initIoExpander() {
     auto* xl9555 = device_find_by_name("xl9555");
     if (xl9555 == nullptr) {

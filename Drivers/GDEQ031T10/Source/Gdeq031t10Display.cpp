@@ -12,8 +12,7 @@
 
 static const auto LOGGER = tt::Logger("GDEQ031T10");
 
-// UC8253-family commands, ported from Xinyuan-LilyGO/T-Deck-MAX's
-// Display_EPD_W21.cpp reference driver.
+// UC8253-family commands.
 namespace {
 constexpr uint8_t CMD_PANEL_SETTING = 0x00;
 constexpr uint8_t CMD_POWER_ON_OFF = 0x02; // shared opcode: power on when followed by 0x04, power off as standalone 0x02
@@ -154,8 +153,7 @@ void Gdeq031t10Display::refreshFull(RefreshMode mode) {
 
     const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
 
-    // shadowFramebuffer keeps the panel-polarity copy of the last frame for the
-    // controller's old/new differential refresh; LVGL's I1 polarity is inverted.
+    // shadowFramebuffer holds a copy of the last frame for differential refresh.
     writeCommand(CMD_DATA_START_OLD);
     writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE);
 
@@ -349,15 +347,9 @@ bool Gdeq031t10Display::startLvgl() {
     lv_display_set_user_data(lvglDisplay, this);
     lv_display_set_color_format(lvglDisplay, LV_COLOR_FORMAT_I1);
 
-    // The default colour theme renders accent-coloured text/icons that threshold
-    // to near-invisible on a 1bpp panel. Apply LVGL's monochrome theme (light
-    // background, dark foreground) so UI content shows as solid black on white.
+    // Use the monochrome theme for better visibility on a 1bpp panel.
     lv_theme_t* baseTheme = lv_theme_mono_init(lvglDisplay, false, LV_FONT_DEFAULT);
-    // Chain a theme on top of the mono theme that disables the textarea cursor
-    // blink. A blinking cursor invalidates its region ~twice a second, and on
-    // e-paper every invalidation is a panel refresh, so text-entry screens (e.g.
-    // the Wi-Fi password field) flash continuously. The mono theme still applies
-    // first (it's the parent); themeApplyCallback only pins the cursor solid.
+    // Also disable the textarea cursor blink to avoid constant refreshes on e-paper.
     static lv_theme_t epaperTheme;
     epaperTheme = *baseTheme;
     lv_theme_set_parent(&epaperTheme, baseTheme);
