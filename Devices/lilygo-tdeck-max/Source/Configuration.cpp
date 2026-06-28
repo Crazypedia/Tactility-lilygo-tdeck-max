@@ -1,6 +1,5 @@
 #include "devices/Display.h"
 #include "devices/Radio.h"
-#include "devices/Sdcard.h"
 #include "devices/TdeckmaxKeyboard.h"
 #include "devices/TdeckmaxPower.h"
 
@@ -113,9 +112,10 @@ static bool initBoot() {
 static DeviceVector createDevices() {
     auto* i2c = device_find_by_name("i2c0");
 
+    // SD card is no longer created here: it's an espressif,esp32-sdspi node in
+    // the devicetree (sdcard@1 under spi0), started by Hal::init's mountAll().
     DeviceVector devices = {
         createDisplay(),
-        createSdCard(),
         createRadio()
     };
 
