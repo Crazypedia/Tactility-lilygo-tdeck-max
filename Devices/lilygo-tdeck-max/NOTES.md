@@ -64,8 +64,28 @@ case body is the action.
   vendor's XPowersLib `PowersSY6970::shutdown()`.
 - **Ship-mode power-off only fully powers down on battery with USB UNPLUGGED.**
   With USB connected the system rail stays up (this is the charger's behaviour,
-  not a bug). The red power LED is on the always-on rail and will not go out while
-  USB is attached.
+  not a bug).
+
+### Red "power" LED is the A7682E modem status LED (NOT a power-rail indicator)
+
+The red LED on the board is **not** a generic power-good light and is **not**
+firmware-uncontrollable. Per the board schematic (`hardware/T-Deck Pro Max V0.1
+.../...pdf`, page 5, `MOD_A7682E_85` block) it is driven by the A7682E LTE modem:
+- modem pin 42 `STATUS` → R54 (49.9R) → `RedLED3` (the red LED; on when the modem
+  is powered and booted)
+- modem pin 41 `NETLIGHT` → R53 (100R) → `LED2` (blinks with network registration)
+
+It is dark in our builds **by design**: our `initIoExpander()`
+(`Source/Configuration.cpp`) only asserts `LORA_EN`/`LORA_SEL` + the touch/keyboard
+resets and intentionally leaves the cellular modem off. The vendor factory firmware
+instead drives *every* XL9555 EN pin HIGH at boot — including `BOARD_XL9555_00_6609_EN`
+(modem supply) and `BOARD_XL9555_10_PWRKEY_EN` — then pulses the modem PWRKEY in
+`A7682E_init()`; once boot completes, `STATUS` goes high and the red LED lights.
+To restore the red LED you must power **and boot** the A7682E (6609_EN high →
+PWRKEY pulse → wait for STATUS high), i.e. run the LTE modem (tens of mA idle,
+TX bursts ~2 A, RF/network activity with a SIM). Decided not worth it as a mere
+"device is on" indicator. Use the keyboard backlight (GPIO42) or EPD frontlight
+(GPIO41) if a cheap power-on light is ever wanted.
 - The physical PWR button is wired to the charger's **/QON pin, not an ESP32 GPIO**
   — firmware cannot read it. Its behaviour is fixed in silicon:
   short press = power on from ship mode; **hold ~10 s (TQON_RST) on battery =
