@@ -7,6 +7,9 @@
 #include <driver/gpio.h>
 
 #include <Tactility/hal/Configuration.h>
+#include <Tactility/hal/gps/GpsConfiguration.h>
+#include <Tactility/kernel/SystemEvents.h>
+#include <Tactility/service/gps/GpsService.h>
 #include <tactility/delay.h>
 #include <tactility/device.h>
 #include <tactility/drivers/gpio_controller.h>
@@ -32,6 +35,9 @@ constexpr auto XL9555_PIN_KEY_RST = 9;   // P11
 // persists after the descriptor is released.
 constexpr auto XL9555_PIN_LORA_EN = 1;  // P01: HIGH enables SX1262 power
 constexpr auto XL9555_PIN_LORA_SEL = 4; // P04: HIGH = internal antenna
+
+// GPS (MIA-M10Q) power rail, via the XL9555 (vendor TDeckMaxBoard.h).
+constexpr auto XL9555_PIN_GPS_EN = 2; // P02: HIGH powers the GPS module
 
 // Release the touch and keyboard reset lines held by the XL9555. Without this
 // the touch controller may stay in a half-powered state and the keyboard's
@@ -83,6 +89,14 @@ static void initIoExpander() {
         gpio_descriptor_release(lora_sel);
     }
 
+    // Power up the GPS so it's ready when the GPS service opens the UART.
+    auto* gps_en = gpio_descriptor_acquire(xl9555, XL9555_PIN_GPS_EN, GPIO_OWNER_GPIO);
+    if (gps_en != nullptr) {
+        gpio_descriptor_set_flags(gps_en, GPIO_FLAG_DIRECTION_OUTPUT);
+        gpio_descriptor_set_level(gps_en, true);
+        gpio_descriptor_release(gps_en);
+    }
+
     delay_millis(60);
 }
 
@@ -106,6 +120,26 @@ static bool initBoot() {
     }
 
     initIoExpander();
+
+    // Register the internal MIA-M10Q GPS once the GPS service is up. 38400 baud
+    // is the u-blox M10 default (matches the vendor factory firmware and the
+    // Meshtastic t-deck-pro variant); if probing fails the module may have been
+    // left at 9600 by other firmware — re-add it via the GPS settings app.
+    tt::kernel::subscribeSystemEvent(tt::kernel::SystemEvent::BootSplash, [](tt::kernel::SystemEvent) {
+        auto gps_service = tt::service::gps::findGpsService();
+        if (gps_service != nullptr) {
+            std::vector<tt::hal::gps::GpsConfiguration> gps_configurations;
+            gps_service->getGpsConfigurations(gps_configurations);
+            if (gps_configurations.empty()) {
+                if (gps_service->addGpsConfiguration(tt::hal::gps::GpsConfiguration {.uartName = "uart0", .baudRate = 38400, .model = tt::hal::gps::GpsModel::UBLOX10})) {
+                    LOG_I("tdeckmax", "Configured internal GPS");
+                } else {
+                    LOG_E("tdeckmax", "Failed to configure internal GPS");
+                }
+            }
+        }
+    });
+
     return true;
 }
 

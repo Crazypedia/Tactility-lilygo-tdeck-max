@@ -6,6 +6,7 @@
 #include <tactility/bindings/esp32_i2c_master.h>
 #include <tactility/bindings/esp32_spi.h>
 #include <tactility/bindings/esp32_sdspi.h>
+#include <tactility/bindings/esp32_uart.h>
 #include <bindings/xl9555.h>
 
 // Reference: https://github.com/Xinyuan-LilyGO/T-Deck-MAX
@@ -36,6 +37,16 @@
 			compatible = "xlsemi,xl9555";
 			reg = <0x20>;
 		};
+	};
+
+	// MIA-M10Q GPS. UART0 is the serial console and UART1 is reserved for the
+	// A7682E LTE modem (vendor Serial1), so the GPS gets UART2. Powered via
+	// XL9555 P02 (GPS_EN), asserted in initIoExpander(). PPS (GPIO1) is unused.
+	uart0 {
+		compatible = "espressif,esp32-uart";
+		port = <UART_NUM_2>;
+		pin-tx = <&gpio0 16 GPIO_FLAG_NONE>; // to GPS RX
+		pin-rx = <&gpio0 2 GPIO_FLAG_NONE>;  // from GPS TX
 	};
 
 	spi0 {
