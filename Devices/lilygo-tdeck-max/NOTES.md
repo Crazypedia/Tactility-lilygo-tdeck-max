@@ -62,6 +62,21 @@ case body is the action.
 - Driver: `Source/devices/TdeckmaxPower.{h,cpp}`. Battery metrics via BQ27220;
   `powerOff()` sets SY6970 ship mode (REG09 bit5, `BATFET_DIS`), matching the
   vendor's XPowersLib `PowersSY6970::shutdown()`.
+- Charger configuration (`configureCharger()`, vendor XPowersLib values):
+  **watchdog off first** (REG07 bits[5:4]=00 — the I2C watchdog otherwise
+  reverts custom register values to defaults), charge target 4288 mV
+  (REG06 VREG bits[7:2], 3840+n·16 mV, n=28), fast-charge 1024 mA (REG04 ICHG
+  bits[6:0]·64 mA, keep bit7 EN_PUMPX). Input current limit (REG00) left at the
+  hardware PSEL/ILIM default.
+- Charging status from REG0B `CHRG_STAT` bits[4:3]: 0=not charging,
+  1=pre-charge, 2=fast, 3=**done** — only 1|2 report as "charging" (XPowersLib
+  once shipped `isChargeDone()` with this inverted; don't trust helper names,
+  decode the field). Falls back to BQ27220 `!DSG` if the charger doesn't answer.
+- Charge on/off (Power app toggle) = REG03 bit4 `CHG_CONFIG`.
+- If measured charge current stays pinned ~400–500 mA despite REG04: check
+  REG00 bit6 `EN_ILIM` / IINLIM — the hardware ILIM pin caps input current
+  regardless of register writes (seen in the wild on LilyGO T-Display-S3-Long).
+  Verify actual current via the BQ27220, not register readback.
 - **Ship-mode power-off only fully powers down on battery with USB UNPLUGGED.**
   With USB connected the system rail stays up (this is the charger's behaviour,
   not a bug).
@@ -165,3 +180,14 @@ battery status, power-off button. All merged to the local `main`.
 ### Done since
 - **Bezel touch-buttons** (heart/speech-bubble/paper-airplane) → Back/Home/Recents.
   See the "Bezel touch-buttons" subsection under [Touch](#touch-cst66xx).
+- **Merged upstream develop (2026-07-04)**: 0.7.0, async GuiService, SD work
+  (#545/#546), properties-parser rewrite (#544 — `device.properties` migrated to
+  flat `group.key=value`; `storage.userDataLocation=Internal` until SD works).
+- **GPS (MIA-M10Q)**: `uart0` node on UART_NUM_2 (TX 16 / RX 2; UART0 = console,
+  UART1 reserved for A7682E), `GPS_EN` XL9555 P02, registered at BootSplash as
+  UBLOX10 @ 38400 (M10 default; if probing fails the module may have been left
+  at 9600 by other firmware — re-add via GPS settings at 9600).
+- **Haptics (DRV2605)**: `M_EN` XL9555 P05 + probe-guarded `Drv2605` device
+  (constructor panics on a dead chip, so absence degrades gracefully).
+- **SY6970 charger**: see the Power section — configured charge parameters,
+  REG0B charging status, Power-app charge on/off toggle.
