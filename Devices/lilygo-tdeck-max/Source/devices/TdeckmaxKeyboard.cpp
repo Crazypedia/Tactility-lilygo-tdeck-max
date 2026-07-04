@@ -51,11 +51,27 @@ static constexpr char keymap_sy[KB_ROWS][KB_COLS] = {
 
 void TdeckmaxKeyboard::readCallback(lv_indev_t* indev, lv_indev_data_t* data) {
     auto keyboard = static_cast<TdeckmaxKeyboard*>(lv_indev_get_user_data(indev));
-    char keypress = 0;
 
+    // Emit the release edge for the previous key first: LVGL's keypad handling
+    // only delivers a key on a RELEASED->PRESSED transition, so two different
+    // keys reported PRESSED back-to-back would swallow the second one.
+    if (keyboard->lastKeyNeedsRelease) {
+        keyboard->lastKeyNeedsRelease = false;
+        data->key = keyboard->lastKey;
+        data->state = LV_INDEV_STATE_RELEASED;
+        data->continue_reading = uxQueueMessagesWaiting(keyboard->queue) > 0;
+        return;
+    }
+
+    char keypress = 0;
     if (xQueueReceive(keyboard->queue, &keypress, 0) == pdPASS) {
-        data->key = keypress;
+        keyboard->lastKey = static_cast<uint32_t>(keypress);
+        keyboard->lastKeyNeedsRelease = true;
+        data->key = keyboard->lastKey;
         data->state = LV_INDEV_STATE_PRESSED;
+        // Drain the whole queue in this read cycle so a typing burst lands in
+        // one render pass (and thus a single e-paper refresh).
+        data->continue_reading = true;
     } else {
         data->key = 0;
         data->state = LV_INDEV_STATE_RELEASED;
@@ -69,43 +85,16 @@ void TdeckmaxKeyboard::processKeyboard() {
     static bool cap_toggle_armed = true;
     bool anykey_pressed = false;
 
-    if (keypad->update()) {
-        anykey_pressed = (keypad->pressed_key_count > 0);
-        for (int i = 0; i < keypad->pressed_key_count; i++) {
-            auto row = keypad->pressed_list[i].row;
-            auto vcol = (KB_COLS - 1) - keypad->pressed_list[i].col;
-
-            if ((row == 2) && (vcol == 0)) {
-                shift_pressed = true; // ALT key
-            }
-            if ((row == 3) && (vcol == 8)) {
-                sym_pressed = true; // SYM key
-            }
-        }
-
-        if ((sym_pressed && shift_pressed) && cap_toggle_armed) {
-            cap_toggle = !cap_toggle;
-            cap_toggle_armed = false;
-        }
-
-        for (int i = 0; i < keypad->pressed_key_count; i++) {
-            auto row = keypad->pressed_list[i].row;
-            auto vcol = (KB_COLS - 1) - keypad->pressed_list[i].col;
-            char chr = '\0';
-            if (sym_pressed) {
-                chr = keymap_sy[row][vcol];
-            } else if (shift_pressed || cap_toggle) {
-                chr = keymap_uc[row][vcol];
-            } else {
-                chr = keymap_lc[row][vcol];
-            }
-
-            if (chr != '\0') xQueueSend(queue, &chr, 50 / portTICK_PERIOD_MS);
-        }
-
-        for (int i = 0; i < keypad->released_key_count; i++) {
-            auto row = keypad->released_list[i].row;
-            auto vcol = (KB_COLS - 1) - keypad->released_list[i].col;
+    // Each update() pops one event from the TCA8418's FIFO. Drain it fully per
+    // poll (bounded, in case of a misbehaving bus) so a fast typing burst isn't
+    // throttled to one event per poll period. Handling each event as a discrete
+    // press/release edge also means a key held across another key's press (fast
+    // typing rollover) no longer re-sends its character.
+    for (int drained = 0; drained < 16 && keypad->update(); drained++) {
+        if (keypad->released_key_count > 0) {
+            // Release event: only modifier state cares about releases.
+            auto row = keypad->released_list[0].row;
+            auto vcol = (KB_COLS - 1) - keypad->released_list[0].col;
 
             if ((row == 2) && (vcol == 0)) {
                 shift_pressed = false; // ALT key
@@ -113,15 +102,42 @@ void TdeckmaxKeyboard::processKeyboard() {
             if ((row == 3) && (vcol == 8)) {
                 sym_pressed = false; // SYM key
             }
+        } else if (keypad->pressed_key_count > 0) {
+            // Press event: the key that caused it is the newest list entry.
+            auto row = keypad->pressed_list[keypad->pressed_key_count - 1].row;
+            auto vcol = (KB_COLS - 1) - keypad->pressed_list[keypad->pressed_key_count - 1].col;
+            anykey_pressed = true;
+
+            if ((row == 2) && (vcol == 0)) {
+                shift_pressed = true; // ALT key
+            } else if ((row == 3) && (vcol == 8)) {
+                sym_pressed = true; // SYM key
+            } else {
+                char chr;
+                if (sym_pressed) {
+                    chr = keymap_sy[row][vcol];
+                } else if (shift_pressed || cap_toggle) {
+                    chr = keymap_uc[row][vcol];
+                } else {
+                    chr = keymap_lc[row][vcol];
+                }
+
+                if (chr != '\0') xQueueSend(queue, &chr, 50 / portTICK_PERIOD_MS);
+            }
+
+            if ((sym_pressed && shift_pressed) && cap_toggle_armed) {
+                cap_toggle = !cap_toggle;
+                cap_toggle_armed = false;
+            }
         }
 
         if ((!sym_pressed && !shift_pressed) && !cap_toggle_armed) {
             cap_toggle_armed = true;
         }
+    }
 
-        if (anykey_pressed) {
-            makeBacklightImpulse();
-        }
+    if (anykey_pressed) {
+        makeBacklightImpulse();
     }
 }
 

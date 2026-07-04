@@ -25,6 +25,10 @@ class TdeckmaxKeyboard final : public tt::hal::keyboard::KeyboardDevice {
     bool backlightOkay = false;
     int backlightImpulseDuty = 0;
     QueueHandle_t queue = nullptr;
+    // LVGL only registers a key on a RELEASED->PRESSED edge, so readCallback
+    // alternates press/release per queued key; this tracks the pending release.
+    uint32_t lastKey = 0;
+    bool lastKeyNeedsRelease = false;
 
     std::shared_ptr<Tca8418> keypad;
     std::unique_ptr<tt::Timer> inputTimer;
