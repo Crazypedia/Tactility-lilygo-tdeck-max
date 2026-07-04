@@ -4,6 +4,7 @@
 #include "devices/TdeckmaxPower.h"
 
 #include <Bq27220.h>
+#include <Drv2605.h>
 #include <driver/gpio.h>
 
 #include <Tactility/hal/Configuration.h>
@@ -13,6 +14,7 @@
 #include <tactility/delay.h>
 #include <tactility/device.h>
 #include <tactility/drivers/gpio_controller.h>
+#include <tactility/drivers/i2c_controller.h>
 #include <tactility/log.h>
 
 using namespace tt::hal;
@@ -38,6 +40,9 @@ constexpr auto XL9555_PIN_LORA_SEL = 4; // P04: HIGH = internal antenna
 
 // GPS (MIA-M10Q) power rail, via the XL9555 (vendor TDeckMaxBoard.h).
 constexpr auto XL9555_PIN_GPS_EN = 2; // P02: HIGH powers the GPS module
+
+// Vibration motor driver (DRV2605) power/enable, via the XL9555 (net M_EN).
+constexpr auto XL9555_PIN_MOTOR_EN = 5; // P05: HIGH powers the DRV2605
 
 // Release the touch and keyboard reset lines held by the XL9555. Without this
 // the touch controller may stay in a half-powered state and the keyboard's
@@ -95,6 +100,14 @@ static void initIoExpander() {
         gpio_descriptor_set_flags(gps_en, GPIO_FLAG_DIRECTION_OUTPUT);
         gpio_descriptor_set_level(gps_en, true);
         gpio_descriptor_release(gps_en);
+    }
+
+    // Power up the vibration motor driver before createDevices probes it.
+    auto* motor_en = gpio_descriptor_acquire(xl9555, XL9555_PIN_MOTOR_EN, GPIO_OWNER_GPIO);
+    if (motor_en != nullptr) {
+        gpio_descriptor_set_flags(motor_en, GPIO_FLAG_DIRECTION_OUTPUT);
+        gpio_descriptor_set_level(motor_en, true);
+        gpio_descriptor_release(motor_en);
     }
 
     delay_millis(60);
@@ -163,6 +176,15 @@ static DeviceVector createDevices() {
         auto gauge = std::make_shared<Bq27220>(i2c);
         devices.push_back(gauge);
         devices.push_back(std::make_shared<TdeckmaxPower>(gauge, i2c));
+
+        // Vibration motor. The Drv2605 constructor panics if the chip doesn't
+        // respond, so probe the address first: if M_EN timing is marginal or the
+        // chip is absent we degrade to no haptics instead of boot-looping.
+        if (i2c_controller_has_device_at_address(i2c, 0x5A, pdMS_TO_TICKS(50)) == ERROR_NONE) {
+            devices.push_back(std::make_shared<Drv2605>(i2c)); // startup buzz confirms hardware
+        } else {
+            LOG_W("tdeckmax", "DRV2605 not found at 0x5A; haptics disabled");
+        }
     }
 
     return devices;
