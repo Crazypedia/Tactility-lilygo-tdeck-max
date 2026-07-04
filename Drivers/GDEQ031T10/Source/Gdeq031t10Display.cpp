@@ -2,6 +2,7 @@
 
 #include <Tactility/Logger.h>
 
+#include <algorithm>
 #include <cstring>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -68,6 +69,8 @@ void Gdeq031t10Display::initFull() {
     writeData(configuration->mirror180 ? 0x13 : 0x1F);
     writeCommand(CMD_POWER_ON);
     waitWhileBusy();
+    panelMode = RefreshMode::Full;
+    panelPowerOn = true;
 }
 
 void Gdeq031t10Display::initFast() {
@@ -76,6 +79,7 @@ void Gdeq031t10Display::initFast() {
     writeData(0x02);
     writeCommand(CMD_FAST_MODE_TIMING);
     writeData(0x5A); // ~1.0s
+    panelMode = RefreshMode::Fast;
 }
 
 void Gdeq031t10Display::initSlow() {
@@ -84,6 +88,7 @@ void Gdeq031t10Display::initSlow() {
     writeData(0x02);
     writeCommand(CMD_FAST_MODE_TIMING);
     writeData(0x6E); // ~1.5s
+    panelMode = RefreshMode::Slow;
 }
 
 void Gdeq031t10Display::initPartial() {
@@ -94,16 +99,90 @@ void Gdeq031t10Display::initPartial() {
     writeData(0x79);
     writeCommand(CMD_VCOM_DATA_INTERVAL);
     writeData(0xD7);
+    panelMode = RefreshMode::Partial;
+}
+
+void Gdeq031t10Display::ensurePanelReady(RefreshMode mode) {
+    if (panelMode != mode) {
+        // A mode change needs the full init path: it starts with reset(), which
+        // restores register defaults (required when leaving partial mode, whose
+        // VCOM/data-interval setting would otherwise linger).
+        switch (mode) {
+            case RefreshMode::Full: initFull(); break;
+            case RefreshMode::Fast: initFast(); break;
+            case RefreshMode::Slow: initSlow(); break;
+            case RefreshMode::Partial: initPartial(); break;
+        }
+    } else if (!panelPowerOn) {
+        // Registers still hold the mode; only the charge pump was idled.
+        writeCommand(CMD_POWER_ON);
+        waitWhileBusy();
+        panelPowerOn = true;
+    }
 }
 
 void Gdeq031t10Display::powerOff() {
     writeCommand(CMD_POWER_ON_OFF); // 0x02 standalone = power off
     waitWhileBusy();
+    panelPowerOn = false;
+}
+
+void Gdeq031t10Display::queueRefresh() {
+    xSemaphoreTake(bufferMutex, portMAX_DELAY);
+    // renderFramebuffer always holds a complete frame (single buffer, full
+    // render mode), so the staged copy is self-contained.
+    std::memcpy(pendingFramebuffer.get(), renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE, FRAMEBUFFER_SIZE);
+    framePending = true;
+    xSemaphoreGive(bufferMutex);
+    xTaskNotifyGive(refreshTask);
+}
+
+void Gdeq031t10Display::refreshTaskMain(void* parameter) {
+    auto* self = static_cast<Gdeq031t10Display*>(parameter);
+    self->runRefreshTask();
+    xSemaphoreGive(self->refreshTaskExited);
+    vTaskDelete(nullptr);
+}
+
+void Gdeq031t10Display::runRefreshTask() {
+    while (true) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if (refreshTaskShouldExit) {
+            return;
+        }
+
+        // Drain staged frames latest-wins: everything LVGL flushed while the
+        // previous refresh was in progress collapses into one panel update.
+        // A frame staged while the panel is off stays staged; the power-on
+        // path kicks this task to draw it.
+        while (!refreshTaskShouldExit && powered) {
+            xSemaphoreTake(bufferMutex, portMAX_DELAY);
+            const bool havePending = framePending;
+            if (havePending) {
+                std::swap(pendingFramebuffer, taskFramebuffer);
+                framePending = false;
+            }
+            xSemaphoreGive(bufferMutex);
+
+            if (!havePending) {
+                break;
+            }
+            refresh();
+        }
+
+        // The pipeline went idle: drop the charge pump now rather than on a
+        // timer. The mode registers survive a power-off, so the next refresh
+        // only pays a short power-on wait (on this task, invisible to the UI).
+        xSemaphoreTake(panelMutex, portMAX_DELAY);
+        if (initialized && powered && panelPowerOn) {
+            powerOff();
+        }
+        xSemaphoreGive(panelMutex);
+    }
 }
 
 void Gdeq031t10Display::refresh() {
-    // The packed 1bpp bitmap LVGL rendered lives after the I1 palette header.
-    const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
+    const uint8_t* renderBitmap = taskFramebuffer.get();
     constexpr int BYTES_PER_ROW = WIDTH / 8;
 
     // Find the bounding box of bytes that differ from what the panel holds. The
@@ -126,33 +205,70 @@ void Gdeq031t10Display::refresh() {
         return; // panel already shows this frame; don't refresh needlessly
     }
 
-    // A change covering most of the screen, the periodic ghost-clear gate, or an
-    // explicit request all warrant a full refresh; otherwise refresh just the box.
+    // A change covering most of the screen or an explicit request warrants a
+    // full refresh; otherwise refresh just the box.
     const int changedRows = nothingChanged ? 0 : (lastRow - firstRow + 1);
     const bool largeChange = changedRows > (HEIGHT * 3 / 4);
-    const bool gateExpired = partialRefreshCount >= MAX_PARTIAL_REFRESHES;
 
-    if (forceFullRefresh || gateExpired || largeChange || nothingChanged) {
+    xSemaphoreTake(panelMutex, portMAX_DELAY);
+    if (!powered || !initialized) {
+        // The display was turned off/stopped while this frame was staged; the
+        // shadow mismatch makes the frame redraw after the next power-on.
+        xSemaphoreGive(panelMutex);
+        return;
+    }
+    if (forceFullRefresh || largeChange || nothingChanged) {
         // Explicit requests get the best-quality LUT; automatic ghost-clears use
         // the configured (typically faster) mode.
         refreshFull(forceFullRefresh ? RefreshMode::Full : currentRefreshMode);
         forceFullRefresh = false;
         partialRefreshCount = 0;
+        ghostAreaValid = false;
+        xSemaphoreGive(panelMutex);
+        return;
+    }
+
+    // Grow the ghost union with this change so the gate sees where partial
+    // updates have accumulated since the last clear.
+    if (!ghostAreaValid) {
+        ghostFirstCol = firstCol;
+        ghostLastCol = lastCol;
+        ghostFirstRow = firstRow;
+        ghostLastRow = lastRow;
+        ghostAreaValid = true;
     } else {
-        refreshWindow(firstCol, lastCol, firstRow, lastRow);
+        ghostFirstCol = std::min(ghostFirstCol, firstCol);
+        ghostLastCol = std::max(ghostLastCol, lastCol);
+        ghostFirstRow = std::min(ghostFirstRow, firstRow);
+        ghostLastRow = std::max(ghostLastRow, lastRow);
+    }
+
+    if (partialRefreshCount >= MAX_PARTIAL_REFRESHES) {
+        // Ghost-clear gate. If the accumulated churn is confined to a small
+        // region (a blinking cursor, a line being typed into), scrub just that
+        // window — a full-screen flash there is needless and distracting. Only
+        // widespread churn earns a whole-panel refresh.
+        const int unionWidth = (ghostLastCol - ghostFirstCol + 1) * 8;
+        const int unionHeight = ghostLastRow - ghostFirstRow + 1;
+        const bool unionIsLarge = unionWidth * unionHeight * 4 >= WIDTH * HEIGHT; // >= 25% of the panel
+        if (unionIsLarge) {
+            refreshFull(currentRefreshMode);
+        } else {
+            refreshWindow(ghostFirstCol, ghostLastCol, ghostFirstRow, ghostLastRow, true);
+        }
+        partialRefreshCount = 0;
+        ghostAreaValid = false;
+    } else {
+        refreshWindow(firstCol, lastCol, firstRow, lastRow, false);
         partialRefreshCount++;
     }
+    xSemaphoreGive(panelMutex);
 }
 
 void Gdeq031t10Display::refreshFull(RefreshMode mode) {
-    switch (mode) {
-        case RefreshMode::Full: initFull(); break;
-        case RefreshMode::Fast: initFast(); break;
-        case RefreshMode::Slow: initSlow(); break;
-        case RefreshMode::Partial: initPartial(); break;
-    }
+    ensurePanelReady(mode);
 
-    const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
+    const uint8_t* renderBitmap = taskFramebuffer.get();
 
     // shadowFramebuffer keeps the panel-polarity copy of the last frame for the
     // controller's old/new differential refresh; LVGL's I1 polarity is inverted.
@@ -168,16 +284,14 @@ void Gdeq031t10Display::refreshFull(RefreshMode mode) {
     writeCommand(CMD_DISPLAY_REFRESH);
     vTaskDelay(pdMS_TO_TICKS(1)); // datasheet requires >=200us settle before polling BUSY
     waitWhileBusy();
-
-    powerOff();
 }
 
-void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow) {
+void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow, bool scrubGhosts) {
     // Partial LUT (fast waveform via temperature force) on a sub-region only. The
     // RAM window must be byte-aligned in X, which it already is (byte columns).
-    initPartial();
+    ensurePanelReady(RefreshMode::Partial);
 
-    const uint8_t* renderBitmap = renderFramebuffer.get() + LVGL_I1_PALETTE_SIZE;
+    const uint8_t* renderBitmap = taskFramebuffer.get();
     constexpr int BYTES_PER_ROW = WIDTH / 8;
     const int widthBytes = lastByteCol - firstByteCol + 1;
 
@@ -197,11 +311,20 @@ void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int fir
     writeData(static_cast<uint8_t>(ye & 0xFF));
     writeData(0x01);
 
-    // Old region: the region's current panel contents (shadow), gathered contiguously.
+    // Old region: normally the region's current panel contents (shadow),
+    // gathered contiguously. For a ghost scrub, feed the complement of the new
+    // data instead: the controller then sees every pixel as changed and drives
+    // each one through a transition, clearing accumulated partial-refresh
+    // ghosting in this window only.
     size_t n = 0;
     for (int row = firstRow; row <= lastRow; row++) {
         const size_t base = static_cast<size_t>(row) * BYTES_PER_ROW + firstByteCol;
-        std::memcpy(&regionBuffer[n], &shadowFramebuffer[base], widthBytes);
+        if (scrubGhosts) {
+            // New panel data is ~renderBitmap, so its complement is renderBitmap.
+            std::memcpy(&regionBuffer[n], &renderBitmap[base], widthBytes);
+        } else {
+            std::memcpy(&regionBuffer[n], &shadowFramebuffer[base], widthBytes);
+        }
         n += widthBytes;
     }
     writeCommand(CMD_DATA_START_OLD);
@@ -224,17 +347,17 @@ void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int fir
     vTaskDelay(pdMS_TO_TICKS(1));
     waitWhileBusy();
     writeCommand(CMD_PARTIAL_OUT);
-
-    powerOff();
 }
 
 void Gdeq031t10Display::flushCallback(lv_display_t* display, const lv_area_t* area, uint8_t* pixelMap) {
-    // pixelMap points into renderFramebuffer (it was passed directly to lv_display_set_buffers),
-    // so the rendered frame is already in place; just trigger the panel update.
+    // pixelMap points into renderFramebuffer (it was passed directly to
+    // lv_display_set_buffers). Only stage the frame here: the physical refresh
+    // takes up to ~1s, so it runs on the driver's refresh task instead of
+    // blocking the LVGL task (which would stall all input handling).
     auto* self = static_cast<Gdeq031t10Display*>(lv_display_get_user_data(display));
 
     if (lv_display_flush_is_last(display)) {
-        self->refresh();
+        self->queueRefresh();
     }
 
     lv_display_flush_ready(display);
@@ -283,18 +406,39 @@ bool Gdeq031t10Display::start() {
         return false;
     }
 
+    if (panelMutex == nullptr) {
+        panelMutex = xSemaphoreCreateMutex();
+    }
+    if (bufferMutex == nullptr) {
+        bufferMutex = xSemaphoreCreateMutex();
+    }
+    if (refreshTaskExited == nullptr) {
+        refreshTaskExited = xSemaphoreCreateBinary();
+    }
+
     shadowFramebuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
     // LVGL needs room for the 8-byte I1 palette ahead of the 1bpp bitmap.
     renderFramebuffer = std::make_unique<uint8_t[]>(LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE);
     // Scratch for gathering a windowed region (worst case = the whole frame).
     regionBuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
+    pendingFramebuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
+    taskFramebuffer = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
     std::memset(shadowFramebuffer.get(), 0xFF, FRAMEBUFFER_SIZE);
     std::memset(renderFramebuffer.get(), 0xFF, LVGL_I1_PALETTE_SIZE + FRAMEBUFFER_SIZE);
+    std::memset(pendingFramebuffer.get(), 0xFF, FRAMEBUFFER_SIZE);
+    std::memset(taskFramebuffer.get(), 0xFF, FRAMEBUFFER_SIZE);
 
     currentRefreshMode = configuration->defaultRefreshMode;
     initFull();
     powered = true;
     initialized = true;
+
+    refreshTaskShouldExit = false;
+    if (xTaskCreate(&refreshTaskMain, "epd_refresh", REFRESH_TASK_STACK_SIZE, this, REFRESH_TASK_PRIORITY, &refreshTask) != pdPASS) {
+        LOGGER.error("Failed to create refresh task");
+        initialized = false;
+        return false;
+    }
     return true;
 }
 
@@ -304,14 +448,26 @@ bool Gdeq031t10Display::stop() {
     }
 
     stopLvgl();
+
+    // Join the refresh task before touching the panel: it may be mid-refresh.
+    refreshTaskShouldExit = true;
+    xTaskNotifyGive(refreshTask);
+    xSemaphoreTake(refreshTaskExited, portMAX_DELAY);
+    refreshTask = nullptr;
+
     setPowerOn(false);
 
+    xSemaphoreTake(panelMutex, portMAX_DELAY);
+    initialized = false;
     spi_bus_remove_device(spiDevice);
     spiDevice = nullptr;
     shadowFramebuffer.reset();
     renderFramebuffer.reset();
     regionBuffer.reset();
-    initialized = false;
+    pendingFramebuffer.reset();
+    taskFramebuffer.reset();
+    framePending = false;
+    xSemaphoreGive(panelMutex);
     return true;
 }
 
@@ -320,16 +476,28 @@ void Gdeq031t10Display::setPowerOn(bool turnOn) {
         return;
     }
 
+    xSemaphoreTake(panelMutex, portMAX_DELAY);
     if (turnOn) {
         initFull(); // toggling RST also wakes the panel from deep sleep
     } else {
-        powerOff();
+        if (panelPowerOn) {
+            powerOff();
+        }
         vTaskDelay(pdMS_TO_TICKS(100));
         writeCommand(CMD_DEEP_SLEEP);
         writeData(DEEP_SLEEP_CHECK_CODE);
+        // Deep sleep needs a reset to wake, which restores register defaults.
+        panelMode.reset();
     }
 
     powered = turnOn;
+    xSemaphoreGive(panelMutex);
+
+    if (turnOn && refreshTask != nullptr) {
+        // initFull left the charge pump on. Kick the refresh task: it redraws
+        // any frame staged while the panel was off, then idles the pump down.
+        xTaskNotifyGive(refreshTask);
+    }
 }
 
 void Gdeq031t10Display::requestFullRefresh() {

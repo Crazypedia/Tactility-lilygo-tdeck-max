@@ -212,14 +212,6 @@ bool Cst66xxTouch::startLvgl(lv_display_t* display) {
     lv_indev_set_read_cb(indev, &readCallback);
     lv_indev_set_display(indev, display);
     lv_indev_set_user_data(indev, this);
-
-    // The e-paper refresh of a button's pressed state blocks LVGL's input loop
-    // for most of a second, so a normal tap looks like a ~1s press. With LVGL's
-    // default 400ms long-press time that suppresses SHORT_CLICKED (which the
-    // launcher and UI buttons use), making taps fail to activate. Raise the
-    // long-press threshold above the refresh-inflated press duration so a tap
-    // still registers as a short click; deliberate long-presses just need >2.5s.
-    lv_indev_set_long_press_time(indev, 2500);
     return true;
 }
 

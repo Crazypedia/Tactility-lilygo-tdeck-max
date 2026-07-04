@@ -3,10 +3,15 @@
 #include <Tactility/hal/display/DisplayDevice.h>
 #include <Tactility/hal/touch/TouchDevice.h>
 
+#include <atomic>
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
 #include <lvgl.h>
 #include <memory>
+#include <optional>
 
 /**
  * Driver for the GoodDisplay GDEQ031T10 (UC8253-family controller) 3.1" 320x240
@@ -87,11 +92,52 @@ private:
      * ghosting that partial updates accumulate. */
     uint8_t partialRefreshCount = 0;
     /** Forces the next refresh to be a full-screen refresh (set at boot and by
-     * requestFullRefresh). */
-    bool forceFullRefresh = true;
+     * requestFullRefresh, read on the refresh task). */
+    std::atomic<bool> forceFullRefresh = true;
     /** Scratch buffer used to gather a windowed region's bytes for one SPI write. */
     std::unique_ptr<uint8_t[]> regionBuffer;
     static constexpr uint8_t MAX_PARTIAL_REFRESHES = 8;
+    /** Union bounding box (byte-column/row space) of all windowed partial
+     * refreshes since the last ghost-clear. When the partial-refresh gate
+     * expires, this decides between a localized scrub and a full-screen
+     * refresh: small repeated updates (a text cursor, a typing line) shouldn't
+     * flash the whole panel. */
+    bool ghostAreaValid = false;
+    int ghostFirstCol = 0;
+    int ghostLastCol = 0;
+    int ghostFirstRow = 0;
+    int ghostLastRow = 0;
+    /** Waveform mode the panel registers currently hold. Empty when the
+     * registers are in an unknown state (before first init, or after deep sleep,
+     * which requires a reset that restores defaults). */
+    std::optional<RefreshMode> panelMode;
+    /** True while the panel's charge pump is on (CMD_POWER_ON issued, no
+     * power-off since). */
+    bool panelPowerOn = false;
+    /** Serializes panel/SPI access between the refresh task and external
+     * callers (setPowerOn, stop). */
+    SemaphoreHandle_t panelMutex = nullptr;
+
+    // The physical refresh takes hundreds of ms to over a second of ink
+    // movement. Running it inside LVGL's flush callback would block the LVGL
+    // task (and with it all input handling) for that long, so flushes only
+    // stage the frame and a dedicated task drives the panel. Frames coalesce
+    // latest-wins: however many flushes arrive during a refresh, only the
+    // newest staged frame is drawn next.
+    static constexpr uint32_t REFRESH_TASK_PRIORITY = 3; // below LVGL (6), above idle
+    static constexpr uint32_t REFRESH_TASK_STACK_SIZE = 4096;
+    TaskHandle_t refreshTask = nullptr;
+    /** Signalled by the refresh task right before it exits; stop() joins on it. */
+    SemaphoreHandle_t refreshTaskExited = nullptr;
+    /** Guards pendingFramebuffer and framePending (LVGL flush vs refresh task). */
+    SemaphoreHandle_t bufferMutex = nullptr;
+    /** Latest complete frame staged by the LVGL flush callback. */
+    std::unique_ptr<uint8_t[]> pendingFramebuffer;
+    /** The refresh task's working copy of the frame it is drawing (swapped with
+     * pendingFramebuffer under bufferMutex; no copy on the task side). */
+    std::unique_ptr<uint8_t[]> taskFramebuffer;
+    bool framePending = false;
+    std::atomic<bool> refreshTaskShouldExit = false;
 
     void writeCommand(uint8_t command);
     void writeData(const uint8_t* data, size_t length);
@@ -104,10 +150,22 @@ private:
     void initSlow();
     void initPartial();
 
+    /** Puts the panel in the given waveform mode with the charge pump on,
+     * skipping the (expensive) init sequence when it already is. */
+    void ensurePanelReady(RefreshMode mode);
+
     void powerOff();
+    /** Stages the LVGL-rendered frame for the refresh task (called on flush). */
+    void queueRefresh();
+    static void refreshTaskMain(void* parameter);
+    void runRefreshTask();
     void refresh();
     void refreshFull(RefreshMode mode);
-    void refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow);
+    /** Windowed partial refresh. With scrubGhosts the controller is fed "old"
+     * data that is the complement of the new frame, so it drives every pixel in
+     * the window through a transition — a localized ghost-clear that only
+     * flashes the window itself. */
+    void refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow, bool scrubGhosts);
 
     static void flushCallback(lv_display_t* display, const lv_area_t* area, uint8_t* pixelMap);
     /** Theme hook: disables the textarea cursor blink (see startLvgl). */
@@ -117,6 +175,18 @@ public:
 
     explicit Gdeq031t10Display(std::unique_ptr<Configuration> inConfiguration) : configuration(std::move(inConfiguration)) {
         assert(configuration != nullptr);
+    }
+
+    ~Gdeq031t10Display() override {
+        if (panelMutex != nullptr) {
+            vSemaphoreDelete(panelMutex);
+        }
+        if (bufferMutex != nullptr) {
+            vSemaphoreDelete(bufferMutex);
+        }
+        if (refreshTaskExited != nullptr) {
+            vSemaphoreDelete(refreshTaskExited);
+        }
     }
 
     std::string getName() const override { return "GDEQ031T10"; }

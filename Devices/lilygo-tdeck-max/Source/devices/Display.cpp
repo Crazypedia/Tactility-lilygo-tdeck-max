@@ -48,9 +48,8 @@ std::shared_ptr<tt::hal::display::DisplayDevice> createDisplay() {
         EPD_PIN_BUSY,
         createTouch(),
         10'000'000,
-        // Default to a fast (~1s) refresh. A full (~3s) refresh holds the LVGL
-        // lock long enough that GuiService's 5s lock timeout trips when several
-        // refreshes queue up, leaving app content undrawn.
+        // Default to a fast (~1s) refresh for the automatic ghost-clears so the
+        // full-screen flash they cause is as short as possible.
         Gdeq031t10Display::RefreshMode::Fast
     );
 
