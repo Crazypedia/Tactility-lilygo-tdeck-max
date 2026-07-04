@@ -52,6 +52,7 @@
 - Enable GPS module for T-Deck Pro Max
 - Assess T-Deck Pro Max hardware feature set against Tactility's existing testing tools and consider expanding core tools or creating a T-Deck Pro Max ELF app for testing
 - RTC? check for real time clock and auto syncing clock when on wifi
+- Make USB host driver disabled by default, so it doesn't consume memory
 - Filtering for apps in App Hub:
   - apps that only work on a specific device
 - Diceware app has large "+" and "-' buttons on Cardputer. It should be smaller.
@@ -104,14 +105,12 @@
 
 # App Ideas
 
-- Revisit TinyUSB mouse idea: the bugs related to cleanup seem to be fixed in the library.
 - Map widget:
   https://github.com/portapack-mayhem/mayhem-firmware/blob/b66d8b1aa178d8a9cd06436fea788d5d58cb4c8d/firmware/application/ui/ui_geomap.cpp
   https://github.com/portapack-mayhem/mayhem-firmware/blob/b66d8b1aa178d8a9cd06436fea788d5d58cb4c8d/firmware/tools/generate_world_map.bin.py
   https://github.com/portapack-mayhem/mayhem-firmware/releases
 - Weather app: https://lab.flipper.net/apps/flip_weather
 - wget app: https://lab.flipper.net/apps/web_crawler (add profiles for known public APIs?)
-- BlueTooth keyboard app
 - Chip 8 emulator
 - BadUSB (in December 2024, TinyUSB has a bug where uninstalling and re-installing the driver fails)
 - Discord bot

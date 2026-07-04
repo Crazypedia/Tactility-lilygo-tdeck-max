@@ -23,6 +23,7 @@ class TimeDateSettingsApp final : public App {
     RecursiveMutex mutex;
     lv_obj_t* timeZoneLabel = nullptr;
     lv_obj_t* dateFormatDropdown = nullptr;
+    bool isShown = false;
 
     static void onTimeFormatChanged(lv_event_t* event) {
         auto* widget = lv_event_get_target_obj(event);
@@ -31,7 +32,7 @@ class TimeDateSettingsApp final : public App {
     }
 
     static void onTimeZonePressed(lv_event_t* event) {
-        timezone::start();
+        timezone::start(true);
     }
 
     static void onDateFormatChanged(lv_event_t* event) {
@@ -133,6 +134,12 @@ public:
         }
         lv_obj_center(timeZoneLabel);
         lv_label_set_text(timeZoneLabel, timeZoneName.c_str());
+
+        isShown = true;
+    }
+
+    void onHide(AppContext& app) override {
+        isShown = false;
     }
 
     void onResult(AppContext& app, LaunchId launchId, Result result, std::unique_ptr<Bundle> bundle) override {
@@ -140,9 +147,10 @@ public:
             const auto name = timezone::getResultName(*bundle);
             const auto code = timezone::getResultCode(*bundle);
             LOGGER.info("Result name={} code={}", name, code);
-            settings::setTimeZone(name, code);
 
-            if (!name.empty()) {
+            // onShow() may not have (re)created the widgets yet: onResult() runs synchronously
+            // on the loader thread and can race ahead of the async gui-task redraw.
+            if (!name.empty() && isShown) {
                 if (lvgl::lock(100 / portTICK_PERIOD_MS)) {
                     lv_label_set_text(timeZoneLabel, name.c_str());
                     lvgl::unlock();
