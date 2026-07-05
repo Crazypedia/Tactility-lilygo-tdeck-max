@@ -43,7 +43,6 @@ if (DEFINED ENV{ESP_IDF_VERSION})
         "TactilityKernel"
         "Tactility"
         "TactilityC"
-        "TactilityCore"
         "TactilityFreeRtos"
         "Libraries/elf_loader"
         "Libraries/lv_screenshot"
@@ -85,7 +84,6 @@ project(Tactility)
 # Defined as regular project for PC and component for ESP
 if (NOT DEFINED ENV{ESP_IDF_VERSION})
     add_subdirectory(Tactility)
-    add_subdirectory(TactilityCore)
     add_subdirectory(TactilityFreeRtos)
     add_subdirectory(TactilityKernel)
     add_subdirectory(Platforms/platform-posix)
@@ -98,6 +96,7 @@ if (NOT DEFINED ENV{ESP_IDF_VERSION})
     add_subdirectory(Libraries/meshtastic-protobufs)
     add_subdirectory(Modules/hal-device-module)
     add_subdirectory(Modules/lvgl-module)
+    add_subdirectory(Modules/crypt-module)
 
     # FreeRTOS
     set(FREERTOS_CONFIG_FILE_DIRECTORY ${PROJECT_SOURCE_DIR}/Devices/simulator/Source CACHE STRING "")

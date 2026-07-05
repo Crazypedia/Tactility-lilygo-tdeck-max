@@ -86,10 +86,11 @@ if (DEFINED ENV{ESP_IDF_VERSION})
     )
 else ()
     list(APPEND REQUIRES_LIST
-        TactilityCore
+        Tactility
         TactilityFreeRtos
         hal-device-module
         lvgl-module
+        crypt-module
         SDL2::SDL2-static
         SDL2-static
     )

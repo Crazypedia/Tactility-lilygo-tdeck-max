@@ -1,4 +1,4 @@
-project(TactilityCoreTests)
+project(TactilityTests)
 
 enable_language(C CXX ASM)
 
@@ -12,11 +12,11 @@ add_test(NAME TactilityTests COMMAND TactilityTests)
 
 target_link_libraries(TactilityTests PRIVATE
     Tactility
-    TactilityCore
     TactilityKernel
     platform-posix
     hal-device-module
     lvgl-module
+    crypt-module
     lvgl
     SDL2::SDL2-static SDL2-static
 )
