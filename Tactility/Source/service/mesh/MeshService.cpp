@@ -412,7 +412,8 @@ void MeshService::maybeSendNodeInfo(uint32_t destination, const ChannelConfig& c
         .data = std::vector<uint8_t>(frame, frame + frameLength),
         .address = 0
     };
-    radio->transmit(packet, nullptr);
+    // transmit() invokes the callback unconditionally — an empty std::function aborts
+    radio->transmit(packet, [](hal::radio::RadioDevice::TxId, hal::radio::RadioDevice::TransmissionState) {});
     LOG_I(TAG, "Queued directed NodeInfo (public key advertisement) to !%08lx", static_cast<unsigned long>(destination));
 }
 
