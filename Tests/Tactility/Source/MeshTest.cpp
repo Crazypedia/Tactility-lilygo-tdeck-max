@@ -226,7 +226,7 @@ TEST_CASE("MeshReceiver should fail decode on a wrong key") {
     // Same hash, different key: hash collision scenario. Decrypting with the
     // wrong key must surface as DecodeFailed, not garbage data.
     const uint8_t otherKey[PSK_SIZE_AES128] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-    receiver.setChannel("LongFast", otherKey, sizeof(otherKey));
+    receiver.setChannels({ChannelConfig("LongFast", otherKey, sizeof(otherKey))});
 
     uint8_t frame[MAX_LORA_PAYLOAD];
     size_t frameLength = buildFrame(frame, sizeof(frame), 0x22334455, 1001, "secret", longFastHash);
@@ -274,6 +274,44 @@ TEST_CASE("buildDataFrame() output should decode through MeshReceiver") {
     CHECK_EQ(packet.data.portnum, meshtastic_PortNum_TEXT_MESSAGE_APP);
     REQUIRE_EQ(packet.data.payload.size, strlen(text));
     CHECK_EQ(memcmp(packet.data.payload.bytes, text, packet.data.payload.size), 0);
+}
+
+TEST_CASE("MeshReceiver should decode secondary-channel traffic with its own key") {
+    const uint8_t customKey[PSK_SIZE_AES128] = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5, 6};
+    const ChannelConfig secondary("Private", customKey, sizeof(customKey));
+
+    MeshReceiver receiver;
+    receiver.setChannels({ChannelConfig::longFast(), secondary});
+
+    meshtastic_Data data = meshtastic_Data_init_zero;
+    data.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
+    const char* text = "keyed channel";
+    data.payload.size = strlen(text);
+    memcpy(data.payload.bytes, text, data.payload.size);
+
+    PacketHeader header;
+    header.to = BROADCAST_ADDRESS;
+    header.from = 0x31415926;
+    header.id = 2718;
+    header.channelHash = secondary.hash;
+
+    uint8_t frame[MAX_LORA_PAYLOAD];
+    size_t frameLength = 0;
+    REQUIRE(buildDataFrame(header, data, secondary.psk, secondary.pskLength, frame, sizeof(frame), frameLength));
+
+    MeshReceiver::ReceivedPacket packet;
+    REQUIRE_EQ(receiver.process(frame, frameLength, -88.0f, 4.0f, packet), MeshReceiver::Result::Ok);
+    CHECK_EQ(packet.channelIndex, 1);
+    REQUIRE_EQ(packet.data.payload.size, strlen(text));
+    CHECK_EQ(memcmp(packet.data.payload.bytes, text, packet.data.payload.size), 0);
+
+    SUBCASE("LongFast traffic still decodes as channel 0") {
+        uint8_t lfFrame[MAX_LORA_PAYLOAD];
+        const uint8_t longFastHash = channelHash("LongFast", DEFAULT_PSK, PSK_SIZE_AES128);
+        size_t lfLength = buildFrame(lfFrame, sizeof(lfFrame), 0x27182818, 314, "public", longFastHash);
+        REQUIRE_EQ(receiver.process(lfFrame, lfLength, -95.0f, 6.0f, packet), MeshReceiver::Result::Ok);
+        CHECK_EQ(packet.channelIndex, 0);
+    }
 }
 
 TEST_CASE("buildDataFrame() should fail when the buffer is too small") {

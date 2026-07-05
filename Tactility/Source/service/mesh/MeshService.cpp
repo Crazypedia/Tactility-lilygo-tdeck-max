@@ -247,14 +247,33 @@ void MeshService::onRx(const hal::radio::RxPacket& rxPacket) {
     }
 }
 
-bool MeshService::sendText(uint32_t destination, const std::string& text) {
+void MeshService::setChannels(std::vector<ChannelConfig> channels) {
+    auto lock = mutex.asScopedLock();
+    lock.lock();
+    receiver.setChannels(std::move(channels));
+}
+
+std::vector<ChannelConfig> MeshService::getChannels() const {
+    auto lock = mutex.asScopedLock();
+    lock.lock();
+    return receiver.getChannels();
+}
+
+uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const std::string& text, TxStatusCallback onStatus) {
     auto lock = mutex.asScopedLock();
     lock.lock();
 
     if (!enabled) {
         LOG_E(TAG, "sendText while disabled");
-        return false;
+        return 0;
     }
+
+    const auto& channels = receiver.getChannels();
+    if (channelIndex >= channels.size()) {
+        LOG_E(TAG, "sendText: invalid channel index %u", static_cast<unsigned>(channelIndex));
+        return 0;
+    }
+    const auto& channel = channels[channelIndex];
 
     meshtastic_Data data = meshtastic_Data_init_zero;
     data.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
@@ -268,24 +287,36 @@ bool MeshService::sendText(uint32_t destination, const std::string& text) {
     header.hopLimit = DEFAULT_HOP_LIMIT;
     header.hopStart = DEFAULT_HOP_LIMIT;
     header.wantAck = destination != BROADCAST_ADDRESS;
-    header.channelHash = channelHash("LongFast", DEFAULT_PSK, PSK_SIZE_AES128);
+    header.channelHash = channel.hash;
 
     uint8_t frame[MAX_LORA_PAYLOAD];
     size_t frameLength = 0;
-    if (!buildDataFrame(header, data, DEFAULT_PSK, PSK_SIZE_AES128, frame, sizeof(frame), frameLength)) {
+    if (!buildDataFrame(header, data, channel.psk, channel.pskLength, frame, sizeof(frame), frameLength)) {
         LOG_E(TAG, "Failed to build frame");
-        return false;
+        return 0;
     }
 
+    const uint32_t packetId = header.id;
     hal::radio::TxPacket packet {
         .data = std::vector<uint8_t>(frame, frame + frameLength),
         .address = 0
     };
-    radio->transmit(packet, [](hal::radio::RadioDevice::TxId id, hal::radio::RadioDevice::TransmissionState state) {
+    radio->transmit(packet, [packetId, onStatus](hal::radio::RadioDevice::TxId id, hal::radio::RadioDevice::TransmissionState state) {
+        using TransmissionState = hal::radio::RadioDevice::TransmissionState;
+        TxStatus status;
+        switch (state) {
+            case TransmissionState::Queued: status = TxStatus::Queued; break;
+            case TransmissionState::PendingTransmit: status = TxStatus::Sending; break;
+            case TransmissionState::Transmitted: status = TxStatus::Sent; break;
+            default: status = TxStatus::Failed; break;
+        }
         LOG_I(TAG, "TX %d state %d", id, static_cast<int>(state));
+        if (onStatus != nullptr) {
+            onStatus(packetId, status);
+        }
     });
-    LOG_I(TAG, "Queued text to !%08lx, id=%lu, %u bytes", static_cast<unsigned long>(destination), static_cast<unsigned long>(header.id), static_cast<unsigned>(frameLength));
-    return true;
+    LOG_I(TAG, "Queued text on ch%u to !%08lx, id=%lu, %u bytes", static_cast<unsigned>(channelIndex), static_cast<unsigned long>(destination), static_cast<unsigned long>(packetId), static_cast<unsigned>(frameLength));
+    return packetId;
 }
 
 std::shared_ptr<MeshService> findService() {

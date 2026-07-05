@@ -2,16 +2,7 @@
 
 #include "Tactility/service/mesh/MeshCodec.h"
 
-#include <cstring>
-
 namespace tt::service::mesh {
-
-void MeshReceiver::setChannel(const std::string& name, const uint8_t* psk, size_t pskLength) {
-    channelName = name;
-    channelPskLength = pskLength <= sizeof(channelPsk) ? pskLength : sizeof(channelPsk);
-    std::memcpy(channelPsk, psk, channelPskLength);
-    configuredChannelHash = channelHash(channelName, channelPsk, channelPskLength);
-}
 
 MeshReceiver::Result MeshReceiver::process(const uint8_t* frame, size_t length, float rssi, float snr, ReceivedPacket& out) {
     if (!parseHeader(frame, length, out.header)) {
@@ -27,22 +18,27 @@ MeshReceiver::Result MeshReceiver::process(const uint8_t* frame, size_t length, 
         return Result::Duplicate;
     }
 
-    if (out.header.channelHash != configuredChannelHash) {
-        return Result::UnknownChannel;
+    bool hashMatched = false;
+    for (size_t i = 0; i < channels.size(); i++) {
+        const auto& channel = channels[i];
+        if (channel.hash != out.header.channelHash) {
+            continue;
+        }
+        hashMatched = true;
+
+        uint8_t decrypted[MAX_ENCRYPTED_PAYLOAD];
+        if (!cryptPayload(out.header.from, out.header.id, channel.psk, channel.pskLength, frame + PACKET_HEADER_SIZE, decrypted, payloadLength)) {
+            continue;
+        }
+        if (decodeData(decrypted, payloadLength, out.data)) {
+            out.channelIndex = i;
+            out.rssi = rssi;
+            out.snr = snr;
+            return Result::Ok;
+        }
     }
 
-    uint8_t decrypted[MAX_ENCRYPTED_PAYLOAD];
-    if (!cryptPayload(out.header.from, out.header.id, channelPsk, channelPskLength, frame + PACKET_HEADER_SIZE, decrypted, payloadLength)) {
-        return Result::DecodeFailed;
-    }
-
-    if (!decodeData(decrypted, payloadLength, out.data)) {
-        return Result::DecodeFailed;
-    }
-
-    out.rssi = rssi;
-    out.snr = snr;
-    return Result::Ok;
+    return hashMatched ? Result::DecodeFailed : Result::UnknownChannel;
 }
 
 } // namespace tt::service::mesh

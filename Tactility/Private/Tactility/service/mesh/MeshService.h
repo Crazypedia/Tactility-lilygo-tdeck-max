@@ -42,10 +42,18 @@ public:
         uint8_t batteryLevel = 0;
     };
 
+    enum class TxStatus {
+        Queued,
+        Sending,
+        Sent,   // radio completed the transmission (not a mesh-level ACK)
+        Failed
+    };
+
     using MessageSubscription = int;
     using NodeSubscription = int;
     using MessageCallback = std::function<void(const MeshReceiver::ReceivedPacket&)>;
     using NodeCallback = std::function<void(const NodeInfo&)>;
+    using TxStatusCallback = std::function<void(uint32_t packetId, TxStatus status)>;
 
     static constexpr MessageSubscription NO_SUBSCRIPTION = -1;
 
@@ -84,14 +92,23 @@ public:
     /** This node's id, as used in the header 'from' field for TX. */
     uint32_t getOwnNodeId() const;
 
-    /** Queue a text message for transmission on the primary channel.
+    /** Channels the node participates in. Index 0 (LongFast by default) is
+     * the primary. Applies live: the receiver decodes with the new table on
+     * the next packet. PSK entry UI lands with the settings app; the field
+     * support is already here. */
+    void setChannels(std::vector<ChannelConfig> channels);
+    std::vector<ChannelConfig> getChannels() const;
+
+    /** Queue a text message for transmission.
      * TX happens only through this call - the service never transmits on
      * its own (no ACKs, no beacons, no NodeInfo).
+     * @param[in] channelIndex index into getChannels()
      * @param[in] destination node id, or BROADCAST_ADDRESS for the channel
      * @param[in] text UTF-8 message, truncated to the payload limit
-     * @return false when disabled or the frame could not be built/queued
+     * @param[in] onStatus optional delivery-state callback (radio thread)
+     * @return the packet id, or 0 when disabled/invalid channel/build failure
      */
-    bool sendText(uint32_t destination, const std::string& text);
+    uint32_t sendText(size_t channelIndex, uint32_t destination, const std::string& text, TxStatusCallback onStatus = nullptr);
 
 private:
 
