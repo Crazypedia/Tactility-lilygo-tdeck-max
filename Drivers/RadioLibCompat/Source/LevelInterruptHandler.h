@@ -31,7 +31,10 @@ private:
     const Type type;
     const ServiceRoutine isr;
     void* context;
-    State state;
+    // Must hold a valid value before gpio_isr_handler_add() runs in install():
+    // that call enables the interrupt as its final step, so the ISR can fire
+    // (and read this) before install() gets to run any code after it.
+    State state = State::Low;
 
     static void handlePositiveEdge(void* isr_arg);
     static void handleNegativeEdge(void* isr_arg);

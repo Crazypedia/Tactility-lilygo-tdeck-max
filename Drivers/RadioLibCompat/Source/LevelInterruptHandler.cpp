@@ -49,14 +49,19 @@ void LevelInterruptHandler::install() {
             gpio_isr_handler_add(pin, handleOneshot, this);
             break;
         case Type::PositiveEdge:
+            // State must be set before gpio_isr_handler_add(): it enables the
+            // interrupt as its final step, and a low idle line fires the ISR
+            // immediately. With a stale state the switch in the handler matches
+            // nothing, the level type never flips, and the ISR storms until the
+            // interrupt watchdog panics.
+            state = State::Low;
             gpio_set_intr_type(pin, GPIO_INTR_LOW_LEVEL);
             gpio_isr_handler_add(pin, handlePositiveEdge, this);
-            state = State::Low;
             break;
         case Type::NegativeEdge:
+            state = State::High;
             gpio_set_intr_type(pin, GPIO_INTR_HIGH_LEVEL);
             gpio_isr_handler_add(pin, handleNegativeEdge, this);
-            state = State::High;
             break;
     }
 }
