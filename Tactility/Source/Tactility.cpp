@@ -100,6 +100,7 @@ namespace app {
     namespace inputdialog { extern const AppManifest manifest; }
     namespace launcher { extern const AppManifest manifest; }
     namespace localesettings { extern const AppManifest manifest; }
+    namespace meshmonitor { extern const AppManifest manifest; }
     namespace notes { extern const AppManifest manifest; }
     namespace radiotest { extern const AppManifest manifest; }
     namespace power { extern const AppManifest manifest; }
@@ -156,6 +157,7 @@ static void registerInternalApps() {
     addAppManifest(app::inputdialog::manifest);
     addAppManifest(app::launcher::manifest);
     addAppManifest(app::localesettings::manifest);
+    addAppManifest(app::meshmonitor::manifest);
     addAppManifest(app::notes::manifest);
     addAppManifest(app::radiotest::manifest);
     addAppManifest(app::settings::manifest);
