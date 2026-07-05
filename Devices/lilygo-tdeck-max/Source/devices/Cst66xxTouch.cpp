@@ -1,6 +1,6 @@
 #include "Cst66xxTouch.h"
 
-#include <Tactility/Logger.h>
+#include <tactility/log.h>
 #include <Tactility/app/App.h>
 #include <tactility/drivers/gpio_controller.h>
 #include <tactility/drivers/i2c_controller.h>
@@ -10,7 +10,7 @@
 // Touch reset is wired to XL9555 P07 (active low).
 static constexpr uint32_t XL9555_PIN_TOUCH_RST = 7;
 
-static const auto LOGGER = tt::Logger("CST66xx");
+constexpr auto* TAG = "CST66xx";
 
 static constexpr TickType_t I2C_TIMEOUT = pdMS_TO_TICKS(20);
 
@@ -74,9 +74,9 @@ bool Cst66xxTouch::start() {
         }
     }
     if (confirmed) {
-        LOGGER.info("CST66xx initialised");
+        LOG_I(TAG, "CST66xx initialised");
     } else {
-        LOGGER.warn("CST66xx identity not confirmed (continuing)");
+        LOG_W(TAG, "CST66xx identity not confirmed (continuing)");
     }
     return true;
 }
@@ -165,7 +165,7 @@ void Cst66xxTouch::handleBezelKey(uint8_t keyId, bool pressed) {
     }
     bezelKeyDown = true;
 
-    LOGGER.debug("bezel key {}", keyId);
+    LOG_D(TAG, "bezel key %u", keyId);
 
     // Bezel button -> navigation action. Edit these cases to customise:
     switch (keyId) {

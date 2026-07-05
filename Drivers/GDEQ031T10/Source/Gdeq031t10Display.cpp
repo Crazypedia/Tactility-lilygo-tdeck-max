@@ -1,6 +1,6 @@
 #include "Gdeq031t10Display.h"
 
-#include <Tactility/Logger.h>
+#include <tactility/log.h>
 
 #include <algorithm>
 #include <cstring>
@@ -11,7 +11,7 @@
 // mono theme with a custom apply callback, per LVGL's theme-extension pattern.
 #include <themes/lv_theme_private.h>
 
-static const auto LOGGER = tt::Logger("GDEQ031T10");
+constexpr auto* TAG = "GDEQ031T10";
 
 // UC8253-family commands, ported from Xinyuan-LilyGO/T-Deck-MAX's
 // Display_EPD_W21.cpp reference driver.
@@ -402,7 +402,7 @@ bool Gdeq031t10Display::start() {
     };
 
     if (spi_bus_add_device(configuration->spiHost, &deviceConfig, &spiDevice) != ESP_OK) {
-        LOGGER.error("Failed to add SPI device");
+        LOG_E(TAG, "Failed to add SPI device");
         return false;
     }
 
@@ -435,7 +435,7 @@ bool Gdeq031t10Display::start() {
 
     refreshTaskShouldExit = false;
     if (xTaskCreate(&refreshTaskMain, "epd_refresh", REFRESH_TASK_STACK_SIZE, this, REFRESH_TASK_PRIORITY, &refreshTask) != pdPASS) {
-        LOGGER.error("Failed to create refresh task");
+        LOG_E(TAG, "Failed to create refresh task");
         initialized = false;
         return false;
     }

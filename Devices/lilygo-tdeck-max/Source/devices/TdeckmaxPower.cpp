@@ -1,9 +1,9 @@
 #include "TdeckmaxPower.h"
 
-#include <Tactility/Logger.h>
+#include <tactility/log.h>
 #include <tactility/drivers/i2c_controller.h>
 
-static const auto LOGGER = tt::Logger("TdeckmaxPower");
+constexpr auto* TAG = "TdeckmaxPower";
 
 // SY6970 charger (newer T-Deck Max revisions; older boards use BQ25896 @ 0x6B).
 // Register map is BQ25896-compatible for everything used here (see NOTES.md).
@@ -27,25 +27,25 @@ static constexpr TickType_t I2C_TIMEOUT = pdMS_TO_TICKS(50);
 // defaults if any write fails.
 bool TdeckmaxPower::configureCharger() const {
     if (i2c_controller_register8_reset_bits(i2c, SY6970_ADDRESS, SY6970_REG_07, 0x30, I2C_TIMEOUT) != ERROR_NONE) {
-        LOGGER.error("Failed to disable SY6970 watchdog");
+        LOG_E(TAG, "Failed to disable SY6970 watchdog");
         return false;
     }
 
     uint8_t reg06 = 0;
     if (i2c_controller_register8_get(i2c, SY6970_ADDRESS, SY6970_REG_06, &reg06, I2C_TIMEOUT) != ERROR_NONE ||
         i2c_controller_register8_set(i2c, SY6970_ADDRESS, SY6970_REG_06, (reg06 & 0x03) | (28 << 2), I2C_TIMEOUT) != ERROR_NONE) { // 3840 + 28*16 = 4288 mV
-        LOGGER.error("Failed to set SY6970 charge voltage");
+        LOG_E(TAG, "Failed to set SY6970 charge voltage");
         return false;
     }
 
     uint8_t reg04 = 0;
     if (i2c_controller_register8_get(i2c, SY6970_ADDRESS, SY6970_REG_04, &reg04, I2C_TIMEOUT) != ERROR_NONE ||
         i2c_controller_register8_set(i2c, SY6970_ADDRESS, SY6970_REG_04, (reg04 & 0x80) | 0x10, I2C_TIMEOUT) != ERROR_NONE) { // 16 * 64 = 1024 mA
-        LOGGER.error("Failed to set SY6970 charge current");
+        LOG_E(TAG, "Failed to set SY6970 charge current");
         return false;
     }
 
-    LOGGER.info("SY6970 configured: 4288 mV / 1024 mA, watchdog off");
+    LOG_I(TAG, "SY6970 configured: 4288 mV / 1024 mA, watchdog off");
     return true;
 }
 
@@ -65,7 +65,7 @@ void TdeckmaxPower::setAllowedToCharge(bool canCharge) {
         result = i2c_controller_register8_reset_bits(i2c, SY6970_ADDRESS, SY6970_REG_03, SY6970_CHG_CONFIG, I2C_TIMEOUT);
     }
     if (result != ERROR_NONE) {
-        LOGGER.error("Failed to set SY6970 charge enable");
+        LOG_E(TAG, "Failed to set SY6970 charge enable");
     }
 }
 
@@ -132,8 +132,8 @@ void TdeckmaxPower::powerOff() {
     // Ship mode: force the charger's BATFET off (REG09 bit5). Mirrors the vendor
     // XPowersLib PowersSY6970::shutdown(). Note: this only fully powers the board
     // down when running on battery with USB unplugged.
-    LOGGER.info("Power off (SY6970 BATFET_DIS)");
+    LOG_I(TAG, "Power off (SY6970 BATFET_DIS)");
     if (i2c_controller_register8_set_bits(i2c, SY6970_ADDRESS, SY6970_REG_09, SY6970_BATFET_DIS, pdMS_TO_TICKS(50)) != ERROR_NONE) {
-        LOGGER.error("Failed to write SY6970 shutdown register");
+        LOG_E(TAG, "Failed to write SY6970 shutdown register");
     }
 }

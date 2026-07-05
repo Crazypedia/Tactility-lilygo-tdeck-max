@@ -2,10 +2,10 @@
 #include "Cst66xxTouch.h"
 
 #include <Gdeq031t10Display.h>
-#include <Tactility/Logger.h>
+#include <tactility/log.h>
 #include <tactility/device.h>
 
-static const auto LOGGER = tt::Logger("TdeckmaxDisplay");
+constexpr auto* TAG = "TdeckmaxDisplay";
 
 // Pins and I2C address from Xinyuan-LilyGO/T-Deck-MAX's
 // lib/TDeckMaxBoard/src/TDeckMaxBoard.h and docs/pinmap.md.
@@ -19,7 +19,7 @@ constexpr uint16_t TOUCH_I2C_ADDRESS = 0x1A;
 static std::shared_ptr<tt::hal::touch::TouchDevice> createTouch() {
     auto* i2c = device_find_by_name("i2c0");
     if (i2c == nullptr) {
-        LOGGER.error("i2c0 not found, booting without touch");
+        LOG_E(TAG, "i2c0 not found, booting without touch");
         return nullptr;
     }
 

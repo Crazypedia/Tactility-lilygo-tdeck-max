@@ -1,6 +1,6 @@
 #include "Cst3530Touch.h"
 
-#include <Tactility/Logger.h>
+#include <tactility/log.h>
 
 #include <esp_lcd_io_i2c.h>
 #include <esp_lcd_touch_cst3530.h>
@@ -11,7 +11,7 @@
 #include <tactility/drivers/esp32_i2c_master.h>
 #include <tactility/drivers/i2c_controller.h>
 
-static const auto LOGGER = tt::Logger("CST3530");
+constexpr auto* TAG = "CST3530";
 
 bool Cst3530Touch::createIoHandle(esp_lcd_panel_io_handle_t& outHandle) {
     // The component's ESP_LCD_TOUCH_IO_I2C_CST3530_CONFIG() macro lists designated
@@ -37,7 +37,7 @@ bool Cst3530Touch::createIoHandle(esp_lcd_panel_io_handle_t& outHandle) {
     } else if (i2c_controller_has_device_at_address(i2c, ESP_LCD_TOUCH_IO_I2C_CST3530_ADDRESS, pdMS_TO_TICKS(10)) == ERROR_NONE) {
         io_config.dev_addr = ESP_LCD_TOUCH_IO_I2C_CST3530_ADDRESS;
     } else {
-        LOGGER.error("No device found on I2C bus");
+        LOG_E(TAG, "No device found on I2C bus");
         return false;
     }
 
@@ -51,7 +51,7 @@ bool Cst3530Touch::createIoHandle(esp_lcd_panel_io_handle_t& outHandle) {
         return esp_lcd_new_panel_io_i2c_v2(bus, &io_config, &outHandle) == ESP_OK;
     }
 
-    LOGGER.error("Unsupported I2C driver");
+    LOG_E(TAG, "Unsupported I2C driver");
     return false;
 }
 
