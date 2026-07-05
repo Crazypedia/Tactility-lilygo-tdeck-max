@@ -1,9 +1,9 @@
-#include "Tactility/service/meshcore/MeshCrypto.h"
+#include "Tactility/service/mesh/MeshCrypto.h"
 
 #include <cstring>
 #include <mbedtls/aes.h>
 
-namespace tt::service::meshcore {
+namespace tt::service::mesh {
 
 // Expansion of the {0x01} PSK setting, from the Meshtastic firmware's
 // CryptoEngine (defaultpsk).
@@ -58,4 +58,4 @@ bool cryptPayload(
     return result == 0;
 }
 
-} // namespace tt::service::meshcore
+} // namespace tt::service::mesh

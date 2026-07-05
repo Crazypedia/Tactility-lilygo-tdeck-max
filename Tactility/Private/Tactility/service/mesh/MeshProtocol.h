@@ -10,7 +10,7 @@
  * (RadioInterface.h, PacketHeader) as of protocol 2.6. All multi-byte
  * fields are little-endian on the wire.
  */
-namespace tt::service::meshcore {
+namespace tt::service::mesh {
 
 /** LoRa sync word shared by all Meshtastic networks. */
 constexpr uint8_t LORA_SYNC_WORD = 0x2B;
@@ -47,4 +47,4 @@ bool parseHeader(const uint8_t* data, size_t length, PacketHeader& out);
 /** Serialize a header into its 16-byte wire format. */
 void serializeHeader(const PacketHeader& header, uint8_t out[PACKET_HEADER_SIZE]);
 
-} // namespace tt::service::meshcore
+} // namespace tt::service::mesh

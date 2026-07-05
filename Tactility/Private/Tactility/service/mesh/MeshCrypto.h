@@ -9,7 +9,7 @@
  * nonce derived from the packet id and sender node number, matching
  * the Meshtastic firmware's CryptoEngine.
  */
-namespace tt::service::meshcore {
+namespace tt::service::mesh {
 
 constexpr size_t PSK_SIZE_AES128 = 16;
 constexpr size_t PSK_SIZE_AES256 = 32;
@@ -45,4 +45,4 @@ bool cryptPayload(
     size_t length
 );
 
-} // namespace tt::service::meshcore
+} // namespace tt::service::mesh

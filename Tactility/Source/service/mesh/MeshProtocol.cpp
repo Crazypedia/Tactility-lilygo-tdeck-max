@@ -1,6 +1,6 @@
-#include "Tactility/service/meshcore/MeshProtocol.h"
+#include "Tactility/service/mesh/MeshProtocol.h"
 
-namespace tt::service::meshcore {
+namespace tt::service::mesh {
 
 constexpr uint8_t FLAG_HOP_LIMIT_MASK = 0x07;
 constexpr uint8_t FLAG_WANT_ACK = 0x08;
@@ -58,4 +58,4 @@ void serializeHeader(const PacketHeader& header, uint8_t out[PACKET_HEADER_SIZE]
     out[15] = header.relayNode;
 }
 
-} // namespace tt::service::meshcore
+} // namespace tt::service::mesh

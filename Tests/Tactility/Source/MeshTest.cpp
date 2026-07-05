@@ -1,13 +1,13 @@
-#include "../../Tactility/Private/Tactility/service/meshcore/MeshCodec.h"
-#include "../../Tactility/Private/Tactility/service/meshcore/MeshCrypto.h"
-#include "../../Tactility/Private/Tactility/service/meshcore/MeshProtocol.h"
-#include "../../Tactility/Private/Tactility/service/meshcore/PacketDedup.h"
+#include "../../Tactility/Private/Tactility/service/mesh/MeshCodec.h"
+#include "../../Tactility/Private/Tactility/service/mesh/MeshCrypto.h"
+#include "../../Tactility/Private/Tactility/service/mesh/MeshProtocol.h"
+#include "../../Tactility/Private/Tactility/service/mesh/PacketDedup.h"
 
 #include "doctest.h"
 
 #include <cstring>
 
-using namespace tt::service::meshcore;
+using namespace tt::service::mesh;
 
 TEST_CASE("parseHeader() should reject frames shorter than the header") {
     uint8_t data[PACKET_HEADER_SIZE - 1] = {};

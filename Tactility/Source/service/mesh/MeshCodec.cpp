@@ -1,9 +1,9 @@
-#include "Tactility/service/meshcore/MeshCodec.h"
+#include "Tactility/service/mesh/MeshCodec.h"
 
 #include <pb_decode.h>
 #include <pb_encode.h>
 
-namespace tt::service::meshcore {
+namespace tt::service::mesh {
 
 bool encodeData(const meshtastic_Data& data, uint8_t* buffer, size_t bufferSize, size_t& encodedSize) {
     pb_ostream_t stream = pb_ostream_from_buffer(buffer, bufferSize);
@@ -19,4 +19,4 @@ bool decodeData(const uint8_t* buffer, size_t length, meshtastic_Data& out) {
     return pb_decode(&stream, meshtastic_Data_fields, &out);
 }
 
-} // namespace tt::service::meshcore
+} // namespace tt::service::mesh

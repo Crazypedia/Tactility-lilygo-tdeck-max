@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace tt::service::meshcore {
+namespace tt::service::mesh {
 
 /**
  * Recent-packet filter keyed on (sender, packet id), matching the mesh
@@ -40,4 +40,4 @@ private:
     size_t nextIndex = 0;
 };
 
-} // namespace tt::service::meshcore
+} // namespace tt::service::mesh

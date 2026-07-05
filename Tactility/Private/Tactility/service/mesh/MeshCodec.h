@@ -9,7 +9,7 @@
  * nanopb encode/decode helpers for the decrypted payload of a mesh
  * packet (a meshtastic.Data protobuf).
  */
-namespace tt::service::meshcore {
+namespace tt::service::mesh {
 
 /** Encode a Data message.
  * @param[in] data message to encode
@@ -28,4 +28,4 @@ bool encodeData(const meshtastic_Data& data, uint8_t* buffer, size_t bufferSize,
  */
 bool decodeData(const uint8_t* buffer, size_t length, meshtastic_Data& out);
 
-} // namespace tt::service::meshcore
+} // namespace tt::service::mesh
