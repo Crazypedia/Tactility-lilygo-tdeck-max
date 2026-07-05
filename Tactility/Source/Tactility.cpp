@@ -51,6 +51,7 @@ static Dispatcher mainDispatcher;
 namespace service {
     // Primary
     namespace gps { extern const ServiceManifest manifest; }
+    namespace mesh { extern const ServiceManifest manifest; }
     namespace wifi { extern const ServiceManifest manifest; }
 #ifdef ESP_PLATFORM
     namespace development { extern const ServiceManifest manifest; }
@@ -278,6 +279,7 @@ static void registerAndStartSecondaryServices() {
 static void registerAndStartPrimaryServices() {
     LOGGER.info("Registering and starting primary system services");
     addService(service::gps::manifest);
+    addService(service::mesh::manifest);
     addService(service::wifi::manifest);
 #ifdef ESP_PLATFORM
     addService(service::development::manifest);

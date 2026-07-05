@@ -1,0 +1,372 @@
+I (203) esp_image: segment 1: paddr=0009f664 vaddr=3fca2000 sizeESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x29 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40380b0e
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x158c
+load:0x403c8700,len:0xd24
+load:0x403cb700,len:0x2f34
+entry 0x403c8924
+I (24) boot: ESP-IDF v5.5.2 2nd stage bootloader
+I (24) boot: compile time Jul  4 2026 14:01:22
+I (25) boot: Multicore bootloader
+I (25) boot: chip revision: v0.2
+I (28) boot: efuse block revision: v1.3
+I (31) boot.esp32s3: Boot SPI Speed : 80MHz
+I (35) boot.esp32s3: SPI Mode       : DIO
+I (39) boot.esp32s3: SPI Flash Size : 16MB
+I (43) boot: Enabling RNG early entropy source...
+I (47) boot: Partition Table:
+I (50) boot: ## Label            Usage          Type ST Offset   Length
+I (56) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (63) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (69) boot:  2 factory          factory app      00 00 00010000 00400000
+I (76) boot:  3 system           Unknown data     01 81 00410000 00019000
+I (82) boot:  4 data             Unknown data     01 81 00429000 00b86000
+I (89) boot: End of partition table
+I (92) esp_image: segment 0: paddr=00010020 vaddr=3c200020 size=8f63ch (587324) map
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x29 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40056f68
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x158c
+load:0x403c8700,len:0xd24
+load:0x403cb700,len:0x2f34
+entry 0x403c8924
+I (24) boot: ESP-IDF v5.5.2 2nd stage bootloader
+I (24) boot: compile time Jul  4 2026 14:01:22
+I (25) boot: Multicore bootloader
+I (25) boot: chip revision: v0.2
+I (28) boot: efuse block revision: v1.3
+I (31) boot.esp32s3: Boot SPI Speed : 80MHz
+I (35) boot.esp32s3: SPI Mode       : DIO
+I (39) boot.esp32s3: SPI Flash Size : 16MB
+I (43) boot: Enabling RNG early entropy source...
+I (47) boot: Partition Table:
+I (50) boot: ## Label            Usage          Type ST Offset   Length
+I (56) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (63) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (69) boot:  2 factory          factory app      00 00 00010000 00400000
+I (76) boot:  3 system           Unknown data     01 81 00410000 00019000
+I (82) boot:  4 data             Unknown data     01 81 00429000 00b86000
+I (89) boot: End of partition table
+I (92) esp_image: segment 0: paddr=00010020 vaddr=3c200020 size=8f63ch (587324) map
+I (203) esp_image: segment 1: paddr=0009f664 vaddr=3fca2000 size=009b4h (  2484) load
+I (204) esp_image: segment 2: paddr=000a0020 vaddr=42000020 size=1fd16ch (2085228) map
+I (574) esp_image: segment 3: paddr=0029d194 vaddr=3fca29b4 size=07db0h ( 32176) load
+I (581) esp_image: segment 4: paddr=002a4f4c vaddr=40374000 size=1df98h (122776) load
+I (608) esp_image: segment 5: paddr=002c2eec vaddr=50000004 size=00020h (    32) load
+I (621) boot: Loaded app from partition at offset 0x10000
+I (621) boot: Disabling RNG early entropy source...
+I (631) esp_psram: Found 8MB PSRAM device
+I (631) esp_psram: Speed: 80MHz
+I (702) mmu_psram: Read only data copied and mapped to SPIRAM
+I (977) mmu_psram: Instructions copied and mapped to SPIRAM
+I (977) cpu_start: Multicore app
+I (985) cpu_start: GPIO 44 and 43 are used as console UART I/O pins
+I (986) cpu_start: Pro cpu start user code
+I (986) cpu_start: cpu freq: 240000000 Hz
+I (988) app_init: Application information:
+I (992) app_init: Project name:     Tactility
+I (996) app_init: App version:      0.8.0-dev
+I (1000) app_init: Compile time:     Jul  4 2026 22:11:43
+I (1005) app_init: ELF file SHA256:  206e6da31...
+I (1009) app_init: ESP-IDF:          v5.5.2
+I (1013) efuse_init: Min chip rev:     v0.0
+I (1017) efuse_init: Max chip rev:     v0.99 
+I (1021) efuse_init: Chip rev:         v0.2
+I (1025) heap_init: Initializing. RAM available for dynamic allocation:
+I (1032) heap_init: At 3FCB3298 len 00036478 (217 KiB): RAM
+I (1037) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (1042) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (1047) heap_init: At 600FE000 len 00001FE8 (7 KiB): RTCRAM
+I (1053) esp_psram: Adding pool of 5568K of PSRAM memory to heap allocator
+I (1059) esp_psram: Adding pool of 2K of PSRAM memory gap generated due to end address alignment of drom to the heap allocator
+I (1071) spi_flash: detected chip: winbond
+I (1074) spi_flash: flash io: dio
+I (1079) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (1084) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (1099) main_task: Started on CPU0
+I (1102) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (1110) main_task: Calling app_main()
+I (1113) Tactility: Tactility v0.8.0-dev on LilyGO T-Deck Pro Max (lilygo-tdeck-max)
+I (1121) Tactility: Initializing kernel
+I (1124) kernel: init
+I (1126) module: start kernel
+I (1129) driver: add root
+I (1131) driver: add display_placeholder
+I (1135) driver: add touch_placeholder
+I (1138) driver: add spi_peripheral
+I (1142) module: start lilygo-tdeck-max
+I (1145) module: start platform-esp32
+I (1148) driver: add esp32_gpio
+I (1151) driver: add esp32_i2c
+I (1154) driver: add esp32_i2c_master
+I (1157) driver: add esp32_i2s
+I (1160) driver: add esp32_sdmmc
+I (1163) driver: add esp32_sdspi
+I (1166) driver: add esp32_spi
+I (1169) driver: add esp32_uart
+I (1172) driver: add esp32_grove
+I (1175) driver: add esp32_bluetooth
+I (1178) driver: add esp32_ble_serial
+I (1181) driver: add esp32_ble_midi
+I (1185) driver: add esp32_ble_hid_device
+I (1188) driver: add esp32_usbhost
+I (1192) driver: add esp32_usbhost_hid
+I (1195) driver: add esp32_usbhost_midi
+I (1199) driver: add esp32_usbhost_msc
+I (1202) module: start xl9555
+I (1205) driver: add xl9555
+I (1207) device: start /
+I (1209) driver: bound root to /
+I (1213) device: start ble0
+I (1216) device: start ble_serial
+I (1218) driver: bound esp32_ble_serial to ble_serial
+I (1223) device: start ble_midi
+I (1226) driver: bound esp32_ble_midi to ble_midi
+I (1230) device: start ble_hid_device
+I (1233) driver: bound esp32_ble_hid_device to ble_hid_device
+I (1239) driver: bound esp32_bluetooth to ble0
+I (1243) device: start gpio0
+I (1246) esp32_gpio: start gpio0
+I (1249) driver: bound esp32_gpio to gpio0
+I (1253) device: start i2c0
+I (1255) esp32_i2c_master: start i2c0
+W (1258) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+I (1274) driver: bound esp32_i2c_master to i2c0
+I (1278) device: start xl9555
+I (1281) XL9555: Started XL9555 device xl9555
+I (1285) driver: bound xl9555 to xl9555
+I (1288) device: start uart0
+I (1291) esp32_uart: uart0 start
+I (1294) driver: bound esp32_uart to uart0
+I (1298) device: start spi0
+I (1300) esp32_spi: start spi0
+I (1304) driver: bound esp32_spi to spi0
+I (1307) kernel: init done
+I (1309) module: start hal-device
+I (1312) driver: add hal-device
+I (1315) Partitions: Init partitions
+I (1318) Partitions: Init NVS
+I (1329) Partitions: Mounted /system
+I (1330) Partitions: Mounted /data
+I (1331) Tactility: Init network
+I (1332) SystemEvents: BootInitHalBegin
+I (1431) Hal: Registering devices
+I (1434) TdeckmaxPower: SY6970 configured: 4288 mV / 1024 mA, watchdog off
+I (1444) Devices: Registering GDEQ031T10 with id 1 as kernel device hal-device-1
+I (1445) device: start hal-device-1
+I (1445) HalDevice: start hal-device-1
+I (1447) driver: bound hal-device to hal-device-1
+I (1452) Devices: Registering CST66xx with id 0 as kernel device hal-device-0
+I (1459) device: start hal-device-0
+I (1462) HalDevice: start hal-device-0
+I (1465) driver: bound hal-device to hal-device-0
+I (1470) Devices: Registering SX1262 with id 2 as kernel device hal-device-2
+I (1477) device: start hal-device-2
+I (1480) HalDevice: start hal-device-2
+I (1483) driver: bound hal-device to hal-device-2
+I (1488) Devices: Registering TCA8418 with id 3 as kernel device hal-device-3
+I (1495) device: start hal-device-3
+I (1498) HalDevice: start hal-device-3
+I (1501) driver: bound hal-device to hal-device-3
+I (1506) Devices: Registering T-Deck Max Keyboard with id 4 as kernel device hal-device-4
+I (1514) device: start hal-device-4
+I (1517) HalDevice: start hal-device-4
+I (1520) driver: bound hal-device to hal-device-4
+I (1525) Devices: Registering BQ27220 with id 5 as kernel device hal-device-5
+I (1532) device: start hal-device-5
+I (1535) HalDevice: start hal-device-5
+I (1538) driver: bound hal-device to hal-device-5
+I (1543) Devices: Registering T-Deck Max Power with id 6 as kernel device hal-device-6
+I (1550) device: start hal-device-6
+I (1553) HalDevice: start hal-device-6
+I (1557) driver: bound hal-device to hal-device-6
+I (1561) Devices: Registering DRV2605 with id 7 as kernel device hal-device-7
+I (1568) device: start hal-device-7
+I (1571) HalDevice: start hal-device-7
+I (1575) driver: bound hal-device to hal-device-7
+I (1579) device: start sdcard
+I (1582) esp32_sdspi: start sdcard
+I (1585) esp32_sdspi_fs: Mounting /sdcard
+I (1590) sdspi_transaction: cmd=52, R1 response: command not supported
+I (1637) sdspi_transaction: cmd=5, R1 response: command not supported
+Name: SD64G
+Type: SDHC
+Speed: 20.00 MHz (limit: 20.00 MHz)
+Size: 59638MB
+CSD: ver=2, sector_size=512, capacity=122138624 read_bl_len=9
+SSR: bus_width=1
+I (1661) esp32_sdspi_fs: Mounted /sdcard
+I (1664) driver: bound esp32_sdspi to sdcard
+I (1669) Hal: Starting displays & touch
+I (1672) Hal: GDEQ031T10 starting
+I (1739) Hal: GDEQ031T10 started
+I (1739) Hal: CST66xx starting
+I (1840) CST66xx: CST66xx initialised
+I (1840) Hal: CST66xx started
+I (1840) SystemEvents: BootInitHalEnd
+I (1841) NTP: Restoring last known time to 1783213097
+I (1845) Tactility: Registering and starting primary system services
+I (1850) ServiceRegistration: Adding Gps
+I (1853) ServiceRegistration: Starting Gps
+I (1857) ServiceRegistration: Started Gps
+I (1861) ServiceRegistration: Adding wifi
+I (1864) ServiceRegistration: Starting wifi
+I (1869) ServiceRegistration: Started wifi
+I (1872) ServiceRegistration: Adding Development
+I (1876) ServiceRegistration: Starting Development
+I (1883) ServiceRegistration: Started Development
+I (1885) ServiceRegistration: Adding EspNow
+I (1889) ServiceRegistration: Starting EspNow
+I (1893) ServiceRegistration: Started EspNow
+I (1897) ServiceRegistration: Adding WebServer
+I (1901) ServiceRegistration: Starting WebServer
+I (1906) WebServerService: Starting WebServer service...
+I (1915) WebServerSettings: AP password is empty - generating secure random password
+I (1919) PropertiesFile: Saving properties file /data/tactility/settings/webserver.properties
+I (3543) WebServerSettings: Generated and saved new secure AP password
+I (3543) WebServerService: WebServer disabled in settings, NOT starting HTTP server (saves ~10KB RAM)
+I (3547) ServiceRegistration: Started WebServer
+I (3551) module: start lvgl
+I (3554) LVGL: Starting LVGL task
+I (3554) LVGL: Adding devices
+I (3559) LVGL: Start displays
+I (3566) LVGL: Started GDEQ031T10
+I (3568) LVGL: Start touch devices
+I (3569) LVGL: Started CST66xx
+I (3571) LVGL: Start keyboards
+I (3577) LVGL: Started T-Deck Max Keyboard
+I (3578) LVGL: Start encoders
+I (3581) Tactility: Registering and starting secondary system services
+I (3587) ServiceRegistration: Adding Loader
+I (3591) ServiceRegistration: Starting Loader
+I (3613) Thread: Starting loader_dispatcher
+I (3613) ServiceRegistration: Started Loader
+I (3614) ServiceRegistration: Adding Gui
+I (3614) ServiceRegistration: Starting Gui
+I (3618) UsbHidInput: started
+I (3623) UsbHidInput: LVGL input devices registered
+I (3625) UsbHidInput: started
+I (3627) Thread: Starting gui
+I (3638) ServiceRegistration: Started Gui
+I (3639) ServiceRegistration: Adding Statusbar
+I (3639) ServiceRegistration: Starting Statusbar
+I (3676) ServiceRegistration: Started Statusbar
+I (3676) ServiceRegistration: Adding MemoryChecker
+I (3677) ServiceRegistration: Starting MemoryChecker
+I (3706) ServiceRegistration: Started MemoryChecker
+I (3706) ServiceRegistration: Adding DisplayIdle
+I (3706) ServiceRegistration: Starting DisplayIdle
+I (3710) ServiceRegistration: Started DisplayIdle
+I (3713) ServiceRegistration: Adding Screenshot
+I (3717) ServiceRegistration: Starting Screenshot
+I (3721) ServiceRegistration: Started Screenshot
+I (3726) Tactility: Core systems ready
+I (3729) Tactility: Starting boot app
+I (3733) AppRegistration: Registering manifest Boot
+I (3738) Loader: Start by id Boot
+I (3740) Loader: App "Boot" state: initial -> started
+I (3745) Loader: App "Boot" state: started -> showing
+I (3750) GuiService: Showing Boot
+I (3755) Boot: A:/system/app/Boot/assets/logo.png
+I (3746) Thread: Starting boot
+I (3761) Boot: Starting boot thread
+I (3763) Tactility: Main dispatcher ready
+I (3773) Boot: Setup display
+I (3774) Boot: No backlight
+I (3776) Tactility: Found existing /data/tactility/tmp
+I (3777) Boot: initFromBootApp
+I (3780) Tactility: Registering internal apps
+I (3784) AppRegistration: Registering manifest AlertDialog
+I (3789) AppRegistration: Registering manifest AppDetails
+I (3794) AppRegistration: Registering manifest AppHub
+I (3799) AppRegistration: Registering manifest AppHubDetails
+I (3805) AppRegistration: Registering manifest AppList
+I (3810) AppRegistration: Registering manifest AppSettings
+I (3815) AppRegistration: Registering manifest Display
+I (3819) AppRegistration: Registering manifest Files
+I (3824) AppRegistration: Registering manifest FileSelection
+I (3830) AppRegistration: Registering manifest I2cScanner
+I (3835) AppRegistration: Registering manifest ImageViewer
+I (3840) AppRegistration: Registering manifest InputDialog
+I (3845) AppRegistration: Registering manifest Launcher
+I (3850) AppRegistration: Registering manifest LocaleSettings
+I (3855) AppRegistration: Registering manifest MeshMonitor
+I (3861) AppRegistration: Registering manifest Notes
+I (3865) AppRegistration: Registering manifest RadioTest
+I (3870) AppRegistration: Registering manifest Settings
+I (3876) AppRegistration: Registering manifest SelectionDialog
+I (3881) AppRegistration: Registering manifest Setup
+I (3885) AppRegistration: Registering manifest SystemInfo
+I (3890) AppRegistration: Registering manifest TimeDateSettings
+I (3896) AppRegistration: Registering manifest TouchCalibration
+I (3902) AppRegistration: Registering manifest TimeZone
+I (3907) AppRegistration: Registering manifest WifiApSettings
+I (3912) AppRegistration: Registering manifest WifiConnect
+I (3918) AppRegistration: Registering manifest WifiManage
+I (3923) AppRegistration: Registering manifest ApWebServer
+I (3928) AppRegistration: Registering manifest WebServerSettings
+I (3934) AppRegistration: Registering manifest CrashDiagnostics
+I (3939) AppRegistration: Registering manifest Development
+I (3945) AppRegistration: Registering manifest UsbSettings
+I (3950) AppRegistration: Registering manifest Screenshot
+I (3955) AppRegistration: Registering manifest Chat
+I (3959) AppRegistration: Registering manifest AddGps
+I (3964) AppRegistration: Registering manifest GpsSettings
+I (3969) AppRegistration: Registering manifest Power
+I (3974) AppRegistration: Registering manifest BtManage
+I (3979) AppRegistration: Registering manifest BtPeerSettings
+I (4763) Loader: dispatching stopTop(Boot)
+I (4763) Loader: App "Boot" state: showing -> hiding
+I (4764) Loader: App "Boot" state: hiding -> stopped
+I (4766) Boot: Publish event
+I (4768) SystemEvents: BootSplash
+I (4778) GpsService: Reading configuration file /data/tactility/service/Gps/config.bin
+I (4781) WifiBootSplashInit: bootSplashInit dispatch
+I (4783) Thread: Stopped boot
+I (4786) WifiBootSplashInit: bootSplashInit dispatch begin
+I (4792) WifiBootSplashInit: Skip provisioning: no files at /data/tactility/provisioning
+I (4795) Loader: Free heap: 109611
+I (4802) Loader: Start by id Launcher
+I (4805) Loader: App "Launcher" state: initial -> started
+I (4811) Launcher: Starting MeshMonitor
+I (4814) Loader: App "Launcher" state: started -> showing
+I (4819) GuiService: Showing Launcher
+I (4820) Loader: Start by id MeshMonitor
+I (4827) Loader: App "Launcher" state: showing -> hiding
+I (4832) Loader: App "MeshMonitor" state: initial -> started
+I (4837) Loader: App "MeshMonitor" state: started -> showing
+I (4841) WifiBootSplashInit: bootSplashInit dispatch end
+I (4842) GuiService: Showing MeshMonitor
+I (4859) RadiolibThreadedDevice: Starting thread
+I (4860) RadiolibThreadedDevice: Starting finished
+I (4860) Thread: Starting SX1262
+I (4860) MeshMonitor: LongFast 906.875 RX-only
+I (59037) MeshMonitor: [!43561f44] pos 39.1381,-84.5414 -116dBm
+I (60486) MeshMonitor: dup from=43561f44 id=3841223076
+I (64957) MeshMonitor: dup from=43561f44 id=3841223076
+I (179219) MeshMonitor: [!5b427e82] pos 39.1381,-84.5414 -63dBm
+I (181280) MeshMonitor: dup from=5b427e82 id=133952186
+E (188437) Sx1262: Error receiving data, RadioLib returned -7
+I (190088) MeshMonitor: [!eedfa487] pos 39.1905,-84.5414 -53dBm
+I (191041) MeshMonitor: dup from=eedfa487 id=2157175013
+I (204615) MeshMonitor: [Nrwd] info: Norwood-Online -117dBm
+I (206696) MeshMonitor: dup from=6d12dba1 id=1881018791
+E (208163) Sx1262: Error receiving data, RadioLib returned -7
+I (214359) MeshMonitor: [zLRd] info: Mesh Potato -51dBm
+I (228968) MeshMonitor: [!43302f64] pos 39.1905,-84.5414 -64dBm
+E (233052) Sx1262: Error receiving data, RadioLib returned -7
+I (301279) MeshMonitor: [!5b427e82] pos 39.1381,-84.5414 -62dBm
+I (307836) MeshMonitor: dup from=5b427e82 id=649516731
+I (377951) MeshMonitor: [!28fcb359] telem bat=93% -52dBm
+I (390021) MeshMonitor: [!435b0ca4] pos 39.1381,-84.5414 -62dBm
+I (416016) MeshMonitor: [!55166e52] pos 39.1905,-84.5414 -62dBm
+I (417685) MeshMonitor: dup from=55166e52 id=1837646837
+E (429024) Sx1262: Error receiving data, RadioLib returned -7
+I (430500) MeshMonitor: [zLRd] pos 39.1381,-84.5414 -52dBm
+I (433190) MeshMonitor: dup from=eedfa487 id=4008513767

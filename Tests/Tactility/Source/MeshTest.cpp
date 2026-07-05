@@ -244,3 +244,49 @@ TEST_CASE("MeshReceiver should reject header-only and oversized frames") {
     CHECK_EQ(receiver.process(frame, sizeof(frame), 0, 0, packet), MeshReceiver::Result::TooShort);
     CHECK_EQ(receiver.process(frame, 3, 0, 0, packet), MeshReceiver::Result::TooShort);
 }
+
+#include "../../Tactility/Private/Tactility/service/mesh/MeshFrameBuilder.h"
+
+TEST_CASE("buildDataFrame() output should decode through MeshReceiver") {
+    meshtastic_Data data = meshtastic_Data_init_zero;
+    data.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
+    const char* text = "tx path check";
+    data.payload.size = strlen(text);
+    memcpy(data.payload.bytes, text, data.payload.size);
+
+    PacketHeader header;
+    header.to = BROADCAST_ADDRESS;
+    header.from = 0x0BADF00D;
+    header.id = 4242;
+    header.hopLimit = 3;
+    header.hopStart = 3;
+    header.channelHash = channelHash("LongFast", DEFAULT_PSK, PSK_SIZE_AES128);
+
+    uint8_t frame[MAX_LORA_PAYLOAD];
+    size_t frameLength = 0;
+    REQUIRE(buildDataFrame(header, data, DEFAULT_PSK, PSK_SIZE_AES128, frame, sizeof(frame), frameLength));
+    CHECK_GT(frameLength, PACKET_HEADER_SIZE);
+
+    MeshReceiver receiver;
+    MeshReceiver::ReceivedPacket packet;
+    REQUIRE_EQ(receiver.process(frame, frameLength, -70.0f, 9.0f, packet), MeshReceiver::Result::Ok);
+    CHECK_EQ(packet.header.from, 0x0BADF00DU);
+    CHECK_EQ(packet.data.portnum, meshtastic_PortNum_TEXT_MESSAGE_APP);
+    REQUIRE_EQ(packet.data.payload.size, strlen(text));
+    CHECK_EQ(memcmp(packet.data.payload.bytes, text, packet.data.payload.size), 0);
+}
+
+TEST_CASE("buildDataFrame() should fail when the buffer is too small") {
+    meshtastic_Data data = meshtastic_Data_init_zero;
+    data.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
+    data.payload.size = 50;
+    memset(data.payload.bytes, 'y', data.payload.size);
+
+    PacketHeader header;
+    header.from = 1;
+    header.id = 1;
+
+    uint8_t frame[24];
+    size_t frameLength = 0;
+    CHECK_EQ(buildDataFrame(header, data, DEFAULT_PSK, PSK_SIZE_AES128, frame, sizeof(frame), frameLength), false);
+}
