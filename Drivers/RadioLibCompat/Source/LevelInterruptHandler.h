@@ -46,7 +46,15 @@ public:
         , type(type)
         , isr(isr)
         , context(context)
-    {}
+    {
+        // A software CPU reset does not reset GPIO config. A level-interrupt
+        // type + enable left behind by a crashed session (with the line still
+        // asserted by the peripheral) storms the shared GPIO interrupt the
+        // moment anyone allocates it — before install() runs. Clear it here,
+        // which runs at device construction, early in boot.
+        gpio_intr_disable(pin);
+        gpio_set_intr_type(pin, GPIO_INTR_DISABLE);
+    }
 
     virtual ~LevelInterruptHandler() {
         disarm();

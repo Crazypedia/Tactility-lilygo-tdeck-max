@@ -90,7 +90,7 @@ protected:
 public:
 
     explicit Sx1262(const Configuration& configuration, const std::string& name = SX1262_DEFAULT_NAME)
-        : RadiolibThreadedDevice(name, 4096)
+        : RadiolibThreadedDevice(name, 8192) // RX subscribers may run mbedtls ECP (PKC DM decrypt) on this thread
         , configuration(configuration)
         , interrupt(configuration.irqPin, LevelInterruptHandler::Type::PositiveEdge, dio1Isr, this)
         , name(name)
