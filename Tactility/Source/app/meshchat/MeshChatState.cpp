@@ -2,6 +2,17 @@
 
 namespace tt::app::meshchat {
 
+ConversationId conversationOf(const service::mesh::MeshService::TextMessage& message, uint32_t ownNodeId) {
+    if (message.isOwn) {
+        return message.to == service::mesh::BROADCAST_ADDRESS
+            ? ConversationId::channel(message.channelIndex)
+            : ConversationId::directMessage(message.to);
+    }
+    return message.to == ownNodeId
+        ? ConversationId::directMessage(message.from)
+        : ConversationId::channel(message.channelIndex);
+}
+
 void MeshChatState::setCurrent(const ConversationId& id) {
     auto lock = mutex.asScopedLock();
     lock.lock();
@@ -14,49 +25,9 @@ ConversationId MeshChatState::getCurrent() const {
     return current;
 }
 
-void MeshChatState::addMessage(const ConversationId& id, const ChatMessage& message) {
-    auto lock = mutex.asScopedLock();
-    lock.lock();
-    auto& messages = conversations[id];
-    messages.push_back(message);
-    while (messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
-        messages.pop_front();
-    }
-}
-
-bool MeshChatState::updateTxStatus(uint32_t packetId, service::mesh::MeshService::TxStatus status) {
-    auto lock = mutex.asScopedLock();
-    lock.lock();
-    for (auto& [id, messages] : conversations) {
-        for (auto& message : messages) {
-            if (message.isOwn && message.packetId == packetId) {
-                message.txStatus = status;
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-std::vector<ChatMessage> MeshChatState::getMessages(const ConversationId& id) const {
-    auto lock = mutex.asScopedLock();
-    lock.lock();
-    const auto it = conversations.find(id);
-    if (it == conversations.end()) {
-        return {};
-    }
-    return {it->second.begin(), it->second.end()};
-}
-
-std::vector<ConversationId> MeshChatState::getConversations() const {
-    auto lock = mutex.asScopedLock();
-    lock.lock();
-    std::vector<ConversationId> result;
-    result.reserve(conversations.size());
-    for (const auto& [id, messages] : conversations) {
-        result.push_back(id);
-    }
-    return result;
+MeshChatState& sharedState() {
+    static MeshChatState state;
+    return state;
 }
 
 } // namespace tt::app::meshchat

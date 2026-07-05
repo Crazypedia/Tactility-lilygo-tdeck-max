@@ -3,14 +3,7 @@
 #include <Tactility/RecursiveMutex.h>
 #include <Tactility/service/mesh/MeshService.h>
 
-#include <deque>
-#include <map>
-#include <string>
-#include <vector>
-
 namespace tt::app::meshchat {
-
-constexpr size_t MAX_MESSAGES_PER_CONVERSATION = 50;
 
 /** A conversation is either a channel (broadcast) or a DM thread with one node. */
 struct ConversationId {
@@ -37,38 +30,26 @@ struct ConversationId {
     }
 };
 
-struct ChatMessage {
-    uint32_t packetId = 0;
-    std::string senderName;
-    std::string text;
-    bool isOwn = false;
-    service::mesh::MeshService::TxStatus txStatus = service::mesh::MeshService::TxStatus::Sent;
-};
+/** The conversation a stored message belongs in: DMs to us thread under the
+ * sender, own DMs under the recipient, everything else under its channel. */
+ConversationId conversationOf(const service::mesh::MeshService::TextMessage& message, uint32_t ownNodeId);
 
-/** Thread safety: all public methods are mutex-protected.
- *  LVGL sync lock must be held separately when updating UI. */
+/** UI state that must survive app relaunches. Message history lives in the
+ * mesh service (getTextMessages()); this only tracks what the user was
+ * looking at. Thread safety: all public methods are mutex-protected. */
 class MeshChatState {
 
     mutable RecursiveMutex mutex;
 
-    std::map<ConversationId, std::deque<ChatMessage>> conversations;
     ConversationId current = ConversationId::channel(0);
 
 public:
 
     void setCurrent(const ConversationId& id);
     ConversationId getCurrent() const;
-
-    void addMessage(const ConversationId& id, const ChatMessage& message);
-
-    /** @return true when the message was found and updated */
-    bool updateTxStatus(uint32_t packetId, service::mesh::MeshService::TxStatus status);
-
-    std::vector<ChatMessage> getMessages(const ConversationId& id) const;
-
-    /** Conversations that have message history (channels without traffic are
-     * listed by the view from the service's channel table instead). */
-    std::vector<ConversationId> getConversations() const;
 };
+
+/** The shared instance, kept alive across app open/close. */
+MeshChatState& sharedState();
 
 } // namespace tt::app::meshchat

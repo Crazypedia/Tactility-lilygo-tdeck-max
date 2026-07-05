@@ -31,6 +31,10 @@ constexpr auto TAG = "MeshService";
 constexpr float LONGFAST_US_FREQUENCY_MHZ = 906.875;
 constexpr uint8_t DEFAULT_HOP_LIMIT = 3;
 
+// In-memory chat history cap, shared across all conversations. Sized for
+// UI scrollback, not archival - persistent storage is a Phase 3 item.
+constexpr size_t MAX_TEXT_MESSAGES = 128;
+
 extern const ServiceManifest manifest;
 
 namespace {
@@ -220,6 +224,55 @@ void MeshService::unsubscribeNodeUpdates(NodeSubscription subscription) {
     std::erase_if(nodeSubscriptions, [subscription](auto& data) { return data.id == subscription; });
 }
 
+MeshService::TxStatusSubscription MeshService::subscribeTxStatus(TxStatusCallback onTxStatus) {
+    auto lock = mutex.asScopedLock();
+    lock.lock();
+    const auto id = ++lastSubscriptionId;
+    txStatusSubscriptions.push_back({id, std::move(onTxStatus)});
+    return id;
+}
+
+void MeshService::unsubscribeTxStatus(TxStatusSubscription subscription) {
+    auto lock = mutex.asScopedLock();
+    lock.lock();
+    std::erase_if(txStatusSubscriptions, [subscription](auto& data) { return data.id == subscription; });
+}
+
+std::vector<MeshService::TextMessage> MeshService::getTextMessages() const {
+    auto lock = mutex.asScopedLock();
+    lock.lock();
+    return {textMessages.begin(), textMessages.end()};
+}
+
+void MeshService::recordTextMessage(TextMessage message) {
+    textMessages.push_back(std::move(message));
+    while (textMessages.size() > MAX_TEXT_MESSAGES) {
+        textMessages.pop_front();
+    }
+}
+
+void MeshService::updateTxStatus(uint32_t packetId, TxStatus status) {
+    // Copy the callback list under the lock, invoke without it: subscribers
+    // may grab other locks (e.g. LVGL) in their callbacks.
+    std::vector<TxStatusCallback> callbacks;
+    {
+        auto lock = mutex.asScopedLock();
+        lock.lock();
+        for (auto& message : textMessages) {
+            if (message.isOwn && message.packetId == packetId) {
+                message.txStatus = status;
+                break;
+            }
+        }
+        for (const auto& subscription : txStatusSubscriptions) {
+            callbacks.push_back(subscription.onTxStatus);
+        }
+    }
+    for (const auto& callback : callbacks) {
+        callback(packetId, status);
+    }
+}
+
 std::vector<MeshService::NodeInfo> MeshService::getNodes() const {
     auto lock = mutex.asScopedLock();
     lock.lock();
@@ -335,6 +388,15 @@ void MeshService::onRx(const hal::radio::RxPacket& rxPacket) {
         lock.lock();
         updateNodeDb(packet);
         nodeSnapshot = nodes[packet.header.from];
+        if (packet.data.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP) {
+            TextMessage message;
+            message.packetId = packet.header.id;
+            message.from = packet.header.from;
+            message.to = packet.header.to;
+            message.channelIndex = packet.channelIndex;
+            message.text = std::string(reinterpret_cast<const char*>(packet.data.payload.bytes), packet.data.payload.size);
+            recordTextMessage(std::move(message));
+        }
         for (const auto& subscription : messageSubscriptions) {
             messageCallbacks.push_back(subscription.onMessage);
         }
@@ -417,7 +479,7 @@ void MeshService::maybeSendNodeInfo(uint32_t destination, const ChannelConfig& c
     LOG_I(TAG, "Queued directed NodeInfo (public key advertisement) to !%08lx", static_cast<unsigned long>(destination));
 }
 
-uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const std::string& text, TxStatusCallback onStatus) {
+uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const std::string& text) {
     auto lock = mutex.asScopedLock();
     lock.lock();
 
@@ -489,11 +551,24 @@ uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const 
     }
 
     const uint32_t packetId = header.id;
+
+    TextMessage message;
+    message.packetId = packetId;
+    message.from = ownNodeId;
+    message.to = destination;
+    message.channelIndex = channelIndex;
+    message.isOwn = true;
+    message.txStatus = TxStatus::Queued;
+    message.text = std::string(reinterpret_cast<const char*>(data.payload.bytes), data.payload.size);
+    recordTextMessage(std::move(message));
+
     hal::radio::TxPacket packet {
         .data = std::vector<uint8_t>(frame, frame + frameLength),
         .address = 0
     };
-    radio->transmit(packet, [packetId, onStatus](hal::radio::RadioDevice::TxId id, hal::radio::RadioDevice::TransmissionState state) {
+    // The lambda captures only the service; it outlives any app, so a
+    // pending TX can't end up invoking a destroyed subscriber directly.
+    radio->transmit(packet, [this, packetId](hal::radio::RadioDevice::TxId id, hal::radio::RadioDevice::TransmissionState state) {
         using TransmissionState = hal::radio::RadioDevice::TransmissionState;
         TxStatus status;
         switch (state) {
@@ -503,9 +578,7 @@ uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const 
             default: status = TxStatus::Failed; break;
         }
         LOG_I(TAG, "TX %d state %d", id, static_cast<int>(state));
-        if (onStatus != nullptr) {
-            onStatus(packetId, status);
-        }
+        updateTxStatus(packetId, status);
     });
     LOG_I(TAG, "Queued %s on ch%u to !%08lx, id=%lu, %u bytes", usePkc ? "PKC text" : "text", static_cast<unsigned>(channelIndex), static_cast<unsigned long>(destination), static_cast<unsigned long>(packetId), static_cast<unsigned>(frameLength));
     return packetId;

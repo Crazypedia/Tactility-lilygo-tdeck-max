@@ -6,6 +6,7 @@
 #include <Tactility/hal/radio/RadioDevice.h>
 #include <Tactility/service/Service.h>
 
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -52,8 +53,22 @@ public:
         Failed
     };
 
+    /** A text message the service heard or sent, retained so chat history
+     * survives app relaunches and covers messages that arrive while no
+     * chat app is open. In-memory only (Phase 3 adds storage). */
+    struct TextMessage {
+        uint32_t packetId = 0;
+        uint32_t from = 0;
+        uint32_t to = 0;         // node id, or BROADCAST_ADDRESS
+        size_t channelIndex = 0; // index into getChannels() at receive/send time
+        bool isOwn = false;
+        TxStatus txStatus = TxStatus::Sent; // meaningful when isOwn
+        std::string text;
+    };
+
     using MessageSubscription = int;
     using NodeSubscription = int;
+    using TxStatusSubscription = int;
     using MessageCallback = std::function<void(const MeshReceiver::ReceivedPacket&)>;
     using NodeCallback = std::function<void(const NodeInfo&)>;
     using TxStatusCallback = std::function<void(uint32_t packetId, TxStatus status)>;
@@ -85,6 +100,15 @@ public:
     /** Subscribe to node database updates (fired when a node is heard). */
     NodeSubscription subscribeNodeUpdates(NodeCallback onNodeUpdate);
     void unsubscribeNodeUpdates(NodeSubscription subscription);
+
+    /** Subscribe to delivery-state changes of messages sent via sendText().
+     * Fired from the radio thread; the message in getTextMessages() is
+     * already updated when the callback runs. */
+    TxStatusSubscription subscribeTxStatus(TxStatusCallback onTxStatus);
+    void unsubscribeTxStatus(TxStatusSubscription subscription);
+
+    /** Snapshot of the retained text-message history, oldest first. */
+    std::vector<TextMessage> getTextMessages() const;
 
     /** Snapshot of the node database. */
     std::vector<NodeInfo> getNodes() const;
@@ -118,13 +142,15 @@ public:
      * peer is preceded by a directed NodeInfo carrying our public key so
      * the peer can decrypt and reply. Other destinations use the channel
      * PSK.
+     *
+     * The message is recorded in the history (see getTextMessages()) and
+     * delivery-state changes go out via subscribeTxStatus().
      * @param[in] channelIndex index into getChannels()
      * @param[in] destination node id, or BROADCAST_ADDRESS for the channel
      * @param[in] text UTF-8 message, truncated to the payload limit
-     * @param[in] onStatus optional delivery-state callback (radio thread)
      * @return the packet id, or 0 when disabled/invalid channel/build failure
      */
-    uint32_t sendText(size_t channelIndex, uint32_t destination, const std::string& text, TxStatusCallback onStatus = nullptr);
+    uint32_t sendText(size_t channelIndex, uint32_t destination, const std::string& text);
 
 private:
 
@@ -138,13 +164,20 @@ private:
         NodeCallback onNodeUpdate;
     };
 
+    struct TxStatusSubscriptionData {
+        TxStatusSubscription id;
+        TxStatusCallback onTxStatus;
+    };
+
     mutable RecursiveMutex mutex;
     std::shared_ptr<hal::radio::RadioDevice> radio;
     hal::radio::RadioDevice::RxSubscriptionId rxSubscription = 0;
     MeshReceiver receiver;
     std::map<uint32_t, NodeInfo> nodes;
+    std::deque<TextMessage> textMessages;
     std::vector<MessageSubscriptionData> messageSubscriptions;
     std::vector<NodeSubscriptionData> nodeSubscriptions;
+    std::vector<TxStatusSubscriptionData> txStatusSubscriptions;
     int lastSubscriptionId = 0;
     bool enabled = false;
     uint32_t ownNodeId = 0;
@@ -159,6 +192,8 @@ private:
     void onRx(const hal::radio::RxPacket& rxPacket);
     void updateNodeDb(const MeshReceiver::ReceivedPacket& packet);
     void maybeSendNodeInfo(uint32_t destination, const ChannelConfig& channel);
+    void recordTextMessage(TextMessage message); // caller holds the mutex
+    void updateTxStatus(uint32_t packetId, TxStatus status);
 };
 
 std::shared_ptr<MeshService> findService();
