@@ -16,3 +16,7 @@
 [submodule "Libraries/cJSON/cJSON"]
 	path = Libraries/cJSON/cJSON
 	url = https://github.com/DaveGamble/cJSON.git
+[submodule "Libraries/meshtastic-protobufs"]
+	path = Libraries/meshtastic-protobufs
+	url = https://github.com/Crazypedia/protobufs.Meshtastilc.ELF.git
+	branch = nanopb-embedded
