@@ -161,3 +161,86 @@ TEST_CASE("PacketDedup should evict oldest entries once full") {
     CHECK_EQ(dedup.checkAndAdd(1, 0), true); // evicted, so treated as new again
     CHECK_EQ(dedup.checkAndAdd(1, 64), false); // still tracked
 }
+#include "../../Tactility/Private/Tactility/service/mesh/MeshReceiver.h"
+
+// Build a complete on-air frame the way a transmitting node would:
+// Data protobuf -> AES-CTR encrypt -> 16-byte header prepended.
+static size_t buildFrame(uint8_t* frame, size_t frameSize, uint32_t from, uint32_t id, const char* text, uint8_t channelHashValue) {
+    meshtastic_Data data = meshtastic_Data_init_zero;
+    data.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
+    data.payload.size = strlen(text);
+    memcpy(data.payload.bytes, text, data.payload.size);
+
+    uint8_t encoded[MAX_ENCRYPTED_PAYLOAD];
+    size_t encodedSize = 0;
+    REQUIRE(encodeData(data, encoded, sizeof(encoded), encodedSize));
+    REQUIRE(frameSize >= PACKET_HEADER_SIZE + encodedSize);
+
+    PacketHeader header;
+    header.to = BROADCAST_ADDRESS;
+    header.from = from;
+    header.id = id;
+    header.hopLimit = 3;
+    header.hopStart = 3;
+    header.channelHash = channelHashValue;
+    serializeHeader(header, frame);
+
+    REQUIRE(cryptPayload(from, id, DEFAULT_PSK, PSK_SIZE_AES128, encoded, frame + PACKET_HEADER_SIZE, encodedSize));
+    return PACKET_HEADER_SIZE + encodedSize;
+}
+
+TEST_CASE("MeshReceiver should decode a LongFast text broadcast end-to-end") {
+    MeshReceiver receiver; // defaults to LongFast
+    const uint8_t longFastHash = channelHash("LongFast", DEFAULT_PSK, PSK_SIZE_AES128);
+
+    uint8_t frame[MAX_LORA_PAYLOAD];
+    size_t frameLength = buildFrame(frame, sizeof(frame), 0x11223344, 999, "hello mesh", longFastHash);
+
+    MeshReceiver::ReceivedPacket packet;
+    REQUIRE_EQ(receiver.process(frame, frameLength, -95.0f, 7.5f, packet), MeshReceiver::Result::Ok);
+    CHECK_EQ(packet.header.from, 0x11223344U);
+    CHECK_EQ(packet.header.to, BROADCAST_ADDRESS);
+    CHECK_EQ(packet.data.portnum, meshtastic_PortNum_TEXT_MESSAGE_APP);
+    REQUIRE_EQ(packet.data.payload.size, strlen("hello mesh"));
+    CHECK_EQ(memcmp(packet.data.payload.bytes, "hello mesh", packet.data.payload.size), 0);
+    CHECK_EQ(packet.rssi, -95.0f);
+    CHECK_EQ(packet.snr, 7.5f);
+
+    SUBCASE("the same frame heard again is a duplicate") {
+        CHECK_EQ(receiver.process(frame, frameLength, -80.0f, 3.0f, packet), MeshReceiver::Result::Duplicate);
+    }
+}
+
+TEST_CASE("MeshReceiver should reject frames for other channels") {
+    MeshReceiver receiver;
+    uint8_t frame[MAX_LORA_PAYLOAD];
+    size_t frameLength = buildFrame(frame, sizeof(frame), 0xAABBCCDD, 1000, "hi", 0x77);
+
+    MeshReceiver::ReceivedPacket packet;
+    CHECK_EQ(receiver.process(frame, frameLength, -90.0f, 5.0f, packet), MeshReceiver::Result::UnknownChannel);
+}
+
+TEST_CASE("MeshReceiver should fail decode on a wrong key") {
+    MeshReceiver receiver;
+    const uint8_t longFastHash = channelHash("LongFast", DEFAULT_PSK, PSK_SIZE_AES128);
+    // Same hash, different key: hash collision scenario. Decrypting with the
+    // wrong key must surface as DecodeFailed, not garbage data.
+    const uint8_t otherKey[PSK_SIZE_AES128] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    receiver.setChannel("LongFast", otherKey, sizeof(otherKey));
+
+    uint8_t frame[MAX_LORA_PAYLOAD];
+    size_t frameLength = buildFrame(frame, sizeof(frame), 0x22334455, 1001, "secret", longFastHash);
+    // Force the configured hash to match so we get past the channel gate.
+    frame[13] = channelHash("LongFast", otherKey, sizeof(otherKey));
+
+    MeshReceiver::ReceivedPacket packet;
+    CHECK_EQ(receiver.process(frame, frameLength, -90.0f, 5.0f, packet), MeshReceiver::Result::DecodeFailed);
+}
+
+TEST_CASE("MeshReceiver should reject header-only and oversized frames") {
+    MeshReceiver receiver;
+    uint8_t frame[PACKET_HEADER_SIZE] = {};
+    MeshReceiver::ReceivedPacket packet;
+    CHECK_EQ(receiver.process(frame, sizeof(frame), 0, 0, packet), MeshReceiver::Result::TooShort);
+    CHECK_EQ(receiver.process(frame, 3, 0, 0, packet), MeshReceiver::Result::TooShort);
+}
