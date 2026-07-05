@@ -3,6 +3,7 @@
 #include "Tactility/service/mesh/MeshCrypto.h"
 #include "Tactility/service/mesh/MeshFrameBuilder.h"
 
+#include <Tactility/Preferences.h>
 #include <Tactility/service/ServiceManifest.h>
 #include <Tactility/service/ServiceRegistration.h>
 
@@ -12,6 +13,11 @@
 
 #include <meshtastic/telemetry.pb.h>
 #include <pb_decode.h>
+#include <pb_encode.h>
+
+#ifdef ESP_PLATFORM
+#include <esp_mac.h>
+#endif
 
 #include <cstdio>
 #include <random>
@@ -27,14 +33,91 @@ constexpr uint8_t DEFAULT_HOP_LIMIT = 3;
 
 extern const ServiceManifest manifest;
 
-bool MeshService::onStart(ServiceContext&) {
-    // Node id and packet id must be unpredictable enough to not collide with
-    // other nodes on air. Real Meshtastic derives the node id from the MAC;
-    // that (plus persistence) lands with the settings app.
-    std::random_device randomDevice;
-    ownNodeId = randomDevice();
-    nextPacketId = randomDevice();
+namespace {
+
+std::string toHex(const uint8_t* data, size_t length) {
+    std::string result(length * 2, '0');
+    for (size_t i = 0; i < length; i++) {
+        snprintf(result.data() + i * 2, 3, "%02x", data[i]);
+    }
+    return result;
+}
+
+bool fromHex(const std::string& hex, uint8_t* out, size_t length) {
+    if (hex.size() != length * 2) {
+        return false;
+    }
+    for (size_t i = 0; i < length; i++) {
+        unsigned value;
+        if (sscanf(hex.c_str() + i * 2, "%02x", &value) != 1) {
+            return false;
+        }
+        out[i] = static_cast<uint8_t>(value);
+    }
     return true;
+}
+
+} // namespace
+
+bool MeshService::onStart(ServiceContext&) {
+    std::random_device randomDevice;
+    nextPacketId = randomDevice();
+    initIdentity();
+    receiver.setPkc(ownNodeId, ownPrivateKey, [this](uint32_t nodeId, uint8_t* publicKeyOut) {
+        auto lock = mutex.asScopedLock();
+        lock.lock();
+        const auto it = nodes.find(nodeId);
+        if (it == nodes.end() || !it->second.hasPublicKey) {
+            return false;
+        }
+        memcpy(publicKeyOut, it->second.publicKey, PKC_KEY_SIZE);
+        return true;
+    });
+    return true;
+}
+
+void MeshService::initIdentity() {
+    // Stable node id: PKC peers bind our public key to it, so it must
+    // survive reboots. Meshtastic derives it from the MAC the same way.
+#ifdef ESP_PLATFORM
+    uint8_t mac[6];
+    if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK) {
+        ownNodeId = static_cast<uint32_t>(mac[2]) << 24 | static_cast<uint32_t>(mac[3]) << 16 | static_cast<uint32_t>(mac[4]) << 8 | mac[5];
+    }
+#else
+    Preferences simPreferences("mesh");
+    int32_t storedId = 0;
+    if (simPreferences.optInt32("nodeId", storedId)) {
+        ownNodeId = static_cast<uint32_t>(storedId);
+    }
+#endif
+    while (ownNodeId < 4 || ownNodeId == BROADCAST_ADDRESS) {
+        std::random_device randomDevice;
+        ownNodeId = randomDevice();
+#ifndef ESP_PLATFORM
+        Preferences("mesh").putInt32("nodeId", static_cast<int32_t>(ownNodeId));
+#endif
+    }
+
+    // X25519 identity keypair for PKC direct messages. Persisted because
+    // peers cache the public key from our NodeInfo; regenerating it every
+    // boot would break their ability to decrypt us ("key changed" warnings).
+    Preferences preferences("mesh");
+    std::string storedKey;
+    if (preferences.optString("privateKey", storedKey) && fromHex(storedKey, ownPrivateKey, PKC_KEY_SIZE)) {
+        hasIdentityKeys = derivePublicKey(ownPrivateKey, ownPublicKey);
+    }
+    if (!hasIdentityKeys) {
+        hasIdentityKeys = generateKeyPair(ownPublicKey, ownPrivateKey);
+        if (hasIdentityKeys) {
+            preferences.putString("privateKey", toHex(ownPrivateKey, PKC_KEY_SIZE));
+        } else {
+            LOG_E(TAG, "Identity key generation failed; PKC DMs unavailable");
+        }
+    }
+    if (hasIdentityKeys) {
+        LOG_I(TAG, "Node !%08lx, public key %s", static_cast<unsigned long>(ownNodeId), toHex(ownPublicKey, 8).c_str());
+    }
 }
 
 void MeshService::onStop(ServiceContext&) {
@@ -166,6 +249,16 @@ uint32_t MeshService::getOwnNodeId() const {
     return ownNodeId;
 }
 
+bool MeshService::getOwnPublicKey(uint8_t publicKeyOut[PKC_KEY_SIZE]) const {
+    auto lock = mutex.asScopedLock();
+    lock.lock();
+    if (!hasIdentityKeys) {
+        return false;
+    }
+    memcpy(publicKeyOut, ownPublicKey, PKC_KEY_SIZE);
+    return true;
+}
+
 void MeshService::updateNodeDb(const MeshReceiver::ReceivedPacket& packet) {
     // Caller holds the mutex.
     auto& node = nodes[packet.header.from];
@@ -181,6 +274,17 @@ void MeshService::updateNodeDb(const MeshReceiver::ReceivedPacket& packet) {
             if (pb_decode(&stream, meshtastic_User_fields, &user)) {
                 node.shortName = user.short_name;
                 node.longName = user.long_name;
+                if (user.public_key.size == PKC_KEY_SIZE) {
+                    if (node.hasPublicKey && memcmp(node.publicKey, user.public_key.bytes, PKC_KEY_SIZE) != 0) {
+                        // A changed key is either a reinstall or an impersonation
+                        // attempt; keep the first-seen key like the firmware does
+                        // until a trust decision UI exists.
+                        LOG_W(TAG, "Node !%08lx advertised a different public key; keeping the first-seen key", static_cast<unsigned long>(node.nodeId));
+                    } else {
+                        memcpy(node.publicKey, user.public_key.bytes, PKC_KEY_SIZE);
+                        node.hasPublicKey = true;
+                    }
+                }
             }
             break;
         }
@@ -259,6 +363,59 @@ std::vector<ChannelConfig> MeshService::getChannels() const {
     return receiver.getChannels();
 }
 
+void MeshService::maybeSendNodeInfo(uint32_t destination, const ChannelConfig& channel) {
+    // Caller holds the mutex and has verified the service is enabled.
+    // Directed (not broadcast), PSK-encrypted like the firmware does for
+    // NODEINFO_APP (Router.cpp excludes it from PKC so new peers can read
+    // it), and only once per peer per boot to keep airtime minimal.
+    if (!hasIdentityKeys || nodeInfoSentTo.contains(destination)) {
+        return;
+    }
+
+    meshtastic_User user = meshtastic_User_init_zero;
+    snprintf(user.id, sizeof(user.id), "!%08lx", static_cast<unsigned long>(ownNodeId));
+    snprintf(user.long_name, sizeof(user.long_name), "Tactility %04x", static_cast<unsigned>(ownNodeId & 0xFFFF));
+    snprintf(user.short_name, sizeof(user.short_name), "%04x", static_cast<unsigned>(ownNodeId & 0xFFFF));
+    user.hw_model = meshtastic_HardwareModel_PRIVATE_HW;
+    user.public_key.size = PKC_KEY_SIZE;
+    memcpy(user.public_key.bytes, ownPublicKey, PKC_KEY_SIZE);
+
+    meshtastic_Data data = meshtastic_Data_init_zero;
+    data.portnum = meshtastic_PortNum_NODEINFO_APP;
+    pb_ostream_t stream = pb_ostream_from_buffer(data.payload.bytes, sizeof(data.payload.bytes));
+    if (!pb_encode(&stream, meshtastic_User_fields, &user)) {
+        LOG_E(TAG, "NodeInfo encode failed");
+        return;
+    }
+    data.payload.size = stream.bytes_written;
+    data.has_bitfield = true;
+    data.bitfield = 0;
+
+    PacketHeader header;
+    header.to = destination;
+    header.from = ownNodeId;
+    header.id = ++nextPacketId;
+    header.hopLimit = DEFAULT_HOP_LIMIT;
+    header.hopStart = DEFAULT_HOP_LIMIT;
+    header.wantAck = false;
+    header.channelHash = channel.hash;
+
+    uint8_t frame[MAX_LORA_PAYLOAD];
+    size_t frameLength = 0;
+    if (!buildDataFrame(header, data, channel.psk, channel.pskLength, frame, sizeof(frame), frameLength)) {
+        LOG_E(TAG, "Failed to build NodeInfo frame");
+        return;
+    }
+
+    nodeInfoSentTo.insert(destination);
+    hal::radio::TxPacket packet {
+        .data = std::vector<uint8_t>(frame, frame + frameLength),
+        .address = 0
+    };
+    radio->transmit(packet, nullptr);
+    LOG_I(TAG, "Queued directed NodeInfo (public key advertisement) to !%08lx", static_cast<unsigned long>(destination));
+}
+
 uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const std::string& text, TxStatusCallback onStatus) {
     auto lock = mutex.asScopedLock();
     lock.lock();
@@ -279,6 +436,27 @@ uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const 
     data.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
     data.payload.size = text.size() < sizeof(data.payload.bytes) ? text.size() : sizeof(data.payload.bytes);
     memcpy(data.payload.bytes, text.data(), data.payload.size);
+    // 2.5+ senders always carry the bitfield byte; bit 0 clear = not OK to
+    // uplink to MQTT, matching the stock firmware default.
+    data.has_bitfield = true;
+    data.bitfield = 0;
+
+    // DMs to peers that advertised an X25519 key must be PKC-sealed:
+    // 2.5+ firmware drops PSK-encrypted DMs from PKC-capable senders.
+    const NodeInfo* destinationNode = nullptr;
+    if (destination != BROADCAST_ADDRESS) {
+        const auto it = nodes.find(destination);
+        if (it != nodes.end() && it->second.hasPublicKey) {
+            destinationNode = &it->second;
+        }
+    }
+    const bool usePkc = destinationNode != nullptr && hasIdentityKeys;
+
+    if (usePkc) {
+        // The peer can only decrypt (and reply) once it has our public key,
+        // which is only ever advertised as part of this user-initiated send.
+        maybeSendNodeInfo(destination, channel);
+    }
 
     PacketHeader header;
     header.to = destination;
@@ -287,11 +465,24 @@ uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const 
     header.hopLimit = DEFAULT_HOP_LIMIT;
     header.hopStart = DEFAULT_HOP_LIMIT;
     header.wantAck = destination != BROADCAST_ADDRESS;
-    header.channelHash = channel.hash;
+    header.channelHash = usePkc ? 0 : channel.hash; // PKC packets carry no channel hash
 
     uint8_t frame[MAX_LORA_PAYLOAD];
     size_t frameLength = 0;
-    if (!buildDataFrame(header, data, channel.psk, channel.pskLength, frame, sizeof(frame), frameLength)) {
+    bool built;
+    if (usePkc) {
+        uint8_t extraNonceBytes[4];
+        if (!secureRandom(extraNonceBytes, sizeof(extraNonceBytes))) {
+            LOG_E(TAG, "RNG failure");
+            return 0;
+        }
+        uint32_t extraNonce;
+        memcpy(&extraNonce, extraNonceBytes, sizeof(extraNonce));
+        built = buildPkcDataFrame(header, data, ownPrivateKey, destinationNode->publicKey, extraNonce, frame, sizeof(frame), frameLength);
+    } else {
+        built = buildDataFrame(header, data, channel.psk, channel.pskLength, frame, sizeof(frame), frameLength);
+    }
+    if (!built) {
         LOG_E(TAG, "Failed to build frame");
         return 0;
     }
@@ -315,7 +506,7 @@ uint32_t MeshService::sendText(size_t channelIndex, uint32_t destination, const 
             onStatus(packetId, status);
         }
     });
-    LOG_I(TAG, "Queued text on ch%u to !%08lx, id=%lu, %u bytes", static_cast<unsigned>(channelIndex), static_cast<unsigned long>(destination), static_cast<unsigned long>(packetId), static_cast<unsigned>(frameLength));
+    LOG_I(TAG, "Queued %s on ch%u to !%08lx, id=%lu, %u bytes", usePkc ? "PKC text" : "text", static_cast<unsigned>(channelIndex), static_cast<unsigned long>(destination), static_cast<unsigned long>(packetId), static_cast<unsigned>(frameLength));
     return packetId;
 }
 

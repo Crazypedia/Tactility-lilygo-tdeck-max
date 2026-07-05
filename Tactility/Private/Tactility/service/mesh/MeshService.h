@@ -9,6 +9,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,8 @@ public:
         double longitude = 0;
         bool hasBattery = false;
         uint8_t batteryLevel = 0;
+        bool hasPublicKey = false;
+        uint8_t publicKey[PKC_KEY_SIZE] = {}; // X25519 key from their NodeInfo, enables PKC DMs
     };
 
     enum class TxStatus {
@@ -89,8 +92,15 @@ public:
     /** Look up a node's display name: short name when known, else !hex id. */
     std::string getNodeName(uint32_t nodeId) const;
 
-    /** This node's id, as used in the header 'from' field for TX. */
+    /** This node's id, as used in the header 'from' field for TX.
+     * MAC-derived (stable across boots) on ESP32; persisted random on the
+     * simulator. */
     uint32_t getOwnNodeId() const;
+
+    /** This node's X25519 public key, advertised to DM peers via NodeInfo.
+     * @return false when identity keys are unavailable (RNG failure)
+     */
+    bool getOwnPublicKey(uint8_t publicKeyOut[PKC_KEY_SIZE]) const;
 
     /** Channels the node participates in. Index 0 (LongFast by default) is
      * the primary. Applies live: the receiver decodes with the new table on
@@ -101,7 +111,13 @@ public:
 
     /** Queue a text message for transmission.
      * TX happens only through this call - the service never transmits on
-     * its own (no ACKs, no beacons, no NodeInfo).
+     * its own (no ACKs, no beacons, no unsolicited NodeInfo).
+     *
+     * Direct messages to a node whose X25519 public key is known are sealed
+     * with PKC (firmware 2.5+ peers require this); the first PKC DM to a
+     * peer is preceded by a directed NodeInfo carrying our public key so
+     * the peer can decrypt and reply. Other destinations use the channel
+     * PSK.
      * @param[in] channelIndex index into getChannels()
      * @param[in] destination node id, or BROADCAST_ADDRESS for the channel
      * @param[in] text UTF-8 message, truncated to the payload limit
@@ -133,10 +149,16 @@ private:
     bool enabled = false;
     uint32_t ownNodeId = 0;
     uint32_t nextPacketId = 0;
+    bool hasIdentityKeys = false;
+    uint8_t ownPrivateKey[PKC_KEY_SIZE] = {};
+    uint8_t ownPublicKey[PKC_KEY_SIZE] = {};
+    std::set<uint32_t> nodeInfoSentTo; // peers we advertised our key to this boot
 
     bool configureRadio();
+    void initIdentity();
     void onRx(const hal::radio::RxPacket& rxPacket);
     void updateNodeDb(const MeshReceiver::ReceivedPacket& packet);
+    void maybeSendNodeInfo(uint32_t destination, const ChannelConfig& channel);
 };
 
 std::shared_ptr<MeshService> findService();

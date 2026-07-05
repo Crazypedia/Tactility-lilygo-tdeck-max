@@ -38,4 +38,35 @@ bool buildDataFrame(
     return true;
 }
 
+bool buildPkcDataFrame(
+    const PacketHeader& header,
+    const meshtastic_Data& data,
+    const uint8_t* ownPrivateKey,
+    const uint8_t* remotePublicKey,
+    uint32_t extraNonce,
+    uint8_t* out,
+    size_t outSize,
+    size_t& frameLength
+) {
+    uint8_t encoded[MAX_ENCRYPTED_PAYLOAD];
+    size_t encodedSize = 0;
+    if (!encodeData(data, encoded, sizeof(encoded), encodedSize)) {
+        return false;
+    }
+
+    if (encodedSize + PKC_OVERHEAD > MAX_ENCRYPTED_PAYLOAD || outSize < PACKET_HEADER_SIZE + encodedSize + PKC_OVERHEAD) {
+        return false;
+    }
+
+    serializeHeader(header, out);
+
+    size_t sealedSize = 0;
+    if (!pkcEncrypt(header.from, header.id, ownPrivateKey, remotePublicKey, extraNonce, encoded, encodedSize, out + PACKET_HEADER_SIZE, outSize - PACKET_HEADER_SIZE, sealedSize)) {
+        return false;
+    }
+
+    frameLength = PACKET_HEADER_SIZE + sealedSize;
+    return true;
+}
+
 } // namespace tt::service::mesh

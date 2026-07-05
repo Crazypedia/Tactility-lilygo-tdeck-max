@@ -7,6 +7,7 @@
 #include <meshtastic/mesh.pb.h>
 
 #include <cstring>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -65,10 +66,16 @@ public:
     struct ReceivedPacket {
         PacketHeader header;
         meshtastic_Data data;
-        size_t channelIndex = 0; // index into getChannels() when Result::Ok
+        size_t channelIndex = 0;  // index into getChannels() when Result::Ok and !pkiEncrypted
+        bool pkiEncrypted = false; // decrypted with our X25519 key, not a channel PSK
         float rssi = 0;
         float snr = 0;
     };
+
+    /** Looks up a node's X25519 public key (32 bytes into publicKeyOut).
+     * @return false when the node or its key is unknown
+     */
+    using PublicKeyLookup = std::function<bool(uint32_t nodeId, uint8_t* publicKeyOut)>;
 
     /** Defaults to the LongFast channel with the well-known PSK. */
     MeshReceiver() {
@@ -84,6 +91,16 @@ public:
         return channels;
     }
 
+    /** Enable PKC direct-message decryption: frames addressed to ownNodeId
+     * with a zero channel hash are tried against the sender's public key
+     * before the channel PSKs. The lookup may be called from the radio
+     * thread and must handle its own locking. */
+    void setPkc(uint32_t newOwnNodeId, const uint8_t newOwnPrivateKey[PKC_KEY_SIZE], PublicKeyLookup lookup) {
+        ownNodeId = newOwnNodeId;
+        memcpy(ownPrivateKey, newOwnPrivateKey, PKC_KEY_SIZE);
+        lookupPublicKey = std::move(lookup);
+    }
+
     /** Process a received frame.
      * @param[in] frame raw LoRa frame (header + encrypted payload)
      * @param[in] length frame length
@@ -97,6 +114,11 @@ private:
 
     PacketDedup dedup;
     std::vector<ChannelConfig> channels;
+    uint32_t ownNodeId = 0;
+    uint8_t ownPrivateKey[PKC_KEY_SIZE] = {};
+    PublicKeyLookup lookupPublicKey;
+
+    bool tryPkcDecrypt(const uint8_t* payload, size_t payloadLength, ReceivedPacket& out);
 };
 
 } // namespace tt::service::mesh

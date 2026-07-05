@@ -328,3 +328,146 @@ TEST_CASE("buildDataFrame() should fail when the buffer is too small") {
     size_t frameLength = 0;
     CHECK_EQ(buildDataFrame(header, data, DEFAULT_PSK, PSK_SIZE_AES128, frame, sizeof(frame), frameLength), false);
 }
+
+// region PKC (Curve25519 direct messages, firmware 2.5+)
+
+// Interop vectors generated independently with python-cryptography
+// (X25519 + SHA256 + AES-256-CCM, tag 8, Meshtastic nonce layout).
+namespace pkcvectors {
+const uint8_t PRIV_A[32] = { 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f };
+const uint8_t PUB_A[32] = { 0xd8, 0x9e, 0x3b, 0xad, 0x79, 0x43, 0x7d, 0xbe, 0xd9, 0xf8, 0x43, 0x41, 0x83, 0x04, 0xf4, 0x60, 0xff, 0x05, 0xc7, 0xfe, 0x81, 0xfe, 0x4a, 0x95, 0x77, 0xa8, 0x04, 0xcb, 0x93, 0x67, 0xff, 0x66 };
+const uint8_t PRIV_B[32] = { 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f };
+const uint8_t PUB_B[32] = { 0x49, 0x3e, 0x82, 0xfc, 0x74, 0x46, 0x4a, 0x59, 0x26, 0x88, 0x17, 0x62, 0x3d, 0x20, 0x53, 0xc5, 0xeb, 0x8e, 0x2c, 0xc4, 0xa9, 0x88, 0xb4, 0xfe, 0xe1, 0x79, 0xec, 0x6b, 0x01, 0x0d, 0x53, 0x1d };
+constexpr uint32_t PACKET_ID = 0x1A2B3C4D;
+constexpr uint32_t FROM_NODE = 0x0DECAF01;
+constexpr uint32_t EXTRA_NONCE = 0xC0FFEE42;
+const uint8_t PLAINTEXT[18] = { 0x50, 0x4b, 0x43, 0x20, 0x64, 0x69, 0x72, 0x65, 0x63, 0x74, 0x20, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65 };
+const uint8_t WIRE[30] = { 0x21, 0x09, 0x82, 0xe4, 0x97, 0xa5, 0x7e, 0x4f, 0x92, 0xb6, 0x48, 0x7d, 0x82, 0xbe, 0xfe, 0x9c, 0xa8, 0x5b, 0x7f, 0x69, 0xc2, 0x63, 0x64, 0x4d, 0x44, 0x85, 0x42, 0xee, 0xff, 0xc0 };
+} // namespace pkcvectors
+
+TEST_CASE("derivePublicKey() should match the reference X25519 public keys") {
+    uint8_t publicKey[PKC_KEY_SIZE];
+    REQUIRE(derivePublicKey(pkcvectors::PRIV_A, publicKey));
+    CHECK_EQ(memcmp(publicKey, pkcvectors::PUB_A, PKC_KEY_SIZE), 0);
+    REQUIRE(derivePublicKey(pkcvectors::PRIV_B, publicKey));
+    CHECK_EQ(memcmp(publicKey, pkcvectors::PUB_B, PKC_KEY_SIZE), 0);
+}
+
+TEST_CASE("pkcEncrypt() should reproduce the reference wire payload") {
+    using namespace pkcvectors;
+    uint8_t out[sizeof(WIRE)];
+    size_t outLength = 0;
+    REQUIRE(pkcEncrypt(FROM_NODE, PACKET_ID, PRIV_A, PUB_B, EXTRA_NONCE, PLAINTEXT, sizeof(PLAINTEXT), out, sizeof(out), outLength));
+    REQUIRE_EQ(outLength, sizeof(WIRE));
+    CHECK_EQ(memcmp(out, WIRE, sizeof(WIRE)), 0);
+}
+
+TEST_CASE("pkcDecrypt() should open the reference wire payload") {
+    using namespace pkcvectors;
+    uint8_t out[sizeof(WIRE)];
+    size_t outLength = 0;
+    // B receives from A: B's private key, A's public key.
+    REQUIRE(pkcDecrypt(FROM_NODE, PACKET_ID, PRIV_B, PUB_A, WIRE, sizeof(WIRE), out, sizeof(out), outLength));
+    REQUIRE_EQ(outLength, sizeof(PLAINTEXT));
+    CHECK_EQ(memcmp(out, PLAINTEXT, sizeof(PLAINTEXT)), 0);
+}
+
+TEST_CASE("pkcDecrypt() should reject tampered payloads and wrong keys") {
+    using namespace pkcvectors;
+    uint8_t out[sizeof(WIRE)];
+    size_t outLength = 0;
+
+    uint8_t tampered[sizeof(WIRE)];
+    memcpy(tampered, WIRE, sizeof(WIRE));
+    tampered[3] ^= 0x01;
+    CHECK_EQ(pkcDecrypt(FROM_NODE, PACKET_ID, PRIV_B, PUB_A, tampered, sizeof(tampered), out, sizeof(out), outLength), false);
+
+    // Wrong sender key: CCM authentication must fail.
+    CHECK_EQ(pkcDecrypt(FROM_NODE, PACKET_ID, PRIV_B, PUB_B, WIRE, sizeof(WIRE), out, sizeof(out), outLength), false);
+
+    // Truncated to overhead-only.
+    CHECK_EQ(pkcDecrypt(FROM_NODE, PACKET_ID, PRIV_B, PUB_A, WIRE, PKC_OVERHEAD, out, sizeof(out), outLength), false);
+}
+
+TEST_CASE("generateKeyPair() should produce working, distinct identities") {
+    uint8_t pubA[PKC_KEY_SIZE], privA[PKC_KEY_SIZE];
+    uint8_t pubB[PKC_KEY_SIZE], privB[PKC_KEY_SIZE];
+    REQUIRE(generateKeyPair(pubA, privA));
+    REQUIRE(generateKeyPair(pubB, privB));
+    CHECK_NE(memcmp(pubA, pubB, PKC_KEY_SIZE), 0);
+
+    uint8_t derived[PKC_KEY_SIZE];
+    REQUIRE(derivePublicKey(privA, derived));
+    CHECK_EQ(memcmp(derived, pubA, PKC_KEY_SIZE), 0);
+
+    // Fresh keys round-trip a payload in both directions.
+    const uint8_t message[] = "keypair roundtrip";
+    uint8_t sealed[sizeof(message) + PKC_OVERHEAD];
+    uint8_t opened[sizeof(message)];
+    size_t sealedLength = 0, openedLength = 0;
+    REQUIRE(pkcEncrypt(1, 2, privA, pubB, 0x12345678, message, sizeof(message), sealed, sizeof(sealed), sealedLength));
+    REQUIRE(pkcDecrypt(1, 2, privB, pubA, sealed, sealedLength, opened, sizeof(opened), openedLength));
+    REQUIRE_EQ(openedLength, sizeof(message));
+    CHECK_EQ(memcmp(opened, message, sizeof(message)), 0);
+}
+
+TEST_CASE("buildPkcDataFrame() output should decode through MeshReceiver PKC path") {
+    using namespace pkcvectors;
+    constexpr uint32_t receiverNodeId = 0x0B0B0B0B;
+
+    meshtastic_Data data = meshtastic_Data_init_zero;
+    data.portnum = meshtastic_PortNum_TEXT_MESSAGE_APP;
+    const char* text = "pkc dm";
+    data.payload.size = strlen(text);
+    memcpy(data.payload.bytes, text, data.payload.size);
+    data.has_bitfield = true;
+    data.bitfield = 0;
+
+    PacketHeader header;
+    header.to = receiverNodeId;
+    header.from = FROM_NODE;
+    header.id = 7777;
+    header.hopLimit = 3;
+    header.hopStart = 3;
+    header.wantAck = true;
+    header.channelHash = 0; // PKC packets carry no channel hash
+
+    uint8_t frame[MAX_LORA_PAYLOAD];
+    size_t frameLength = 0;
+    REQUIRE(buildPkcDataFrame(header, data, PRIV_A, PUB_B, 0xA5A5A5A5, frame, sizeof(frame), frameLength));
+
+    MeshReceiver receiver; // LongFast configured; PKC tried before PSKs
+    receiver.setPkc(receiverNodeId, PRIV_B, [](uint32_t nodeId, uint8_t* publicKeyOut) {
+        if (nodeId != FROM_NODE) {
+            return false;
+        }
+        memcpy(publicKeyOut, PUB_A, PKC_KEY_SIZE);
+        return true;
+    });
+
+    MeshReceiver::ReceivedPacket packet;
+    REQUIRE_EQ(receiver.process(frame, frameLength, -60.0f, 10.0f, packet), MeshReceiver::Result::Ok);
+    CHECK_EQ(packet.pkiEncrypted, true);
+    CHECK_EQ(packet.data.portnum, meshtastic_PortNum_TEXT_MESSAGE_APP);
+    REQUIRE_EQ(packet.data.payload.size, strlen(text));
+    CHECK_EQ(memcmp(packet.data.payload.bytes, text, packet.data.payload.size), 0);
+
+    SUBCASE("the same DM is rejected when the sender's key is unknown") {
+        MeshReceiver noKeyReceiver;
+        noKeyReceiver.setPkc(receiverNodeId, PRIV_B, [](uint32_t, uint8_t*) { return false; });
+        MeshReceiver::ReceivedPacket rejected;
+        CHECK_EQ(noKeyReceiver.process(frame, frameLength, -60.0f, 10.0f, rejected), MeshReceiver::Result::UnknownChannel);
+    }
+
+    SUBCASE("a DM addressed to someone else is not decrypted") {
+        MeshReceiver otherReceiver;
+        otherReceiver.setPkc(0x0C0C0C0C, PRIV_B, [](uint32_t, uint8_t* publicKeyOut) {
+            memcpy(publicKeyOut, PUB_A, PKC_KEY_SIZE);
+            return true;
+        });
+        MeshReceiver::ReceivedPacket rejected;
+        CHECK_EQ(otherReceiver.process(frame, frameLength, -60.0f, 10.0f, rejected), MeshReceiver::Result::UnknownChannel);
+    }
+}
+
+// endregion
