@@ -27,6 +27,7 @@ if (DEFINED ENV{ESP_IDF_VERSION})
         esp-tls
         esp_wifi
         json # Effectively cJSON
+        meshtastic-protobufs
         nvs_flash
         spiffs
         vfs
@@ -46,6 +47,7 @@ else ()
         freertos_kernel
         cJSON
         lvgl
+        meshtastic_pb
     )
 
 endif ()

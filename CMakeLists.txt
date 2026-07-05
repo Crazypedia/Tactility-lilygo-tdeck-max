@@ -50,6 +50,7 @@ if (DEFINED ENV{ESP_IDF_VERSION})
         "Libraries/minitar"
         "Libraries/minmea"
         "Libraries/QRCode"
+        "Libraries/meshtastic-protobufs"
     )
 
     set(EXCLUDE_COMPONENTS "Simulator")
@@ -94,6 +95,7 @@ if (NOT DEFINED ENV{ESP_IDF_VERSION})
     add_subdirectory(Libraries/QRCode)
     add_subdirectory(Libraries/minitar)
     add_subdirectory(Libraries/minmea)
+    add_subdirectory(Libraries/meshtastic-protobufs)
     add_subdirectory(Modules/hal-device-module)
     add_subdirectory(Modules/lvgl-module)
 
