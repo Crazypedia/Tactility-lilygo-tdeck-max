@@ -85,8 +85,8 @@ private:
     /** Render target for LVGL; copied to the panel on flush */
     std::unique_ptr<uint8_t[]> renderFramebuffer;
     bool initialized = false;
-    bool powered = false;
-    RefreshMode currentRefreshMode = RefreshMode::Full;
+    std::atomic<bool> powered = false;
+    std::atomic<RefreshMode> currentRefreshMode = RefreshMode::Full;
     /** Number of windowed partial refreshes since the last full refresh. A full
      * refresh is forced once this reaches MAX_PARTIAL_REFRESHES to clear the
      * ghosting that partial updates accumulate. */
@@ -139,22 +139,27 @@ private:
     bool framePending = false;
     std::atomic<bool> refreshTaskShouldExit = false;
 
-    void writeCommand(uint8_t command);
-    void writeData(const uint8_t* data, size_t length);
-    void writeData(uint8_t data) { writeData(&data, 1); }
-    void waitWhileBusy() const;
+    /** Returns false if the SPI transfer failed; the panel/shadow state should
+     * not be advanced as if it succeeded. */
+    bool writeCommand(uint8_t command);
+    bool writeData(const uint8_t* data, size_t length);
+    bool writeData(uint8_t data) { return writeData(&data, 1); }
+    /** Waits for the BUSY pin to report ready, up to a fixed timeout. Returns
+     * false (and logs) if the panel never became ready, e.g. bad wiring or no
+     * panel attached — callers must not assume the operation completed. */
+    bool waitWhileBusy() const;
     void reset() const;
 
-    void initFull();
-    void initFast();
-    void initSlow();
-    void initPartial();
+    bool initFull();
+    bool initFast();
+    bool initSlow();
+    bool initPartial();
 
     /** Puts the panel in the given waveform mode with the charge pump on,
      * skipping the (expensive) init sequence when it already is. */
-    void ensurePanelReady(RefreshMode mode);
+    bool ensurePanelReady(RefreshMode mode);
 
-    void powerOff();
+    bool powerOff();
     /** Stages the LVGL-rendered frame for the refresh task (called on flush). */
     void queueRefresh();
     static void refreshTaskMain(void* parameter);
@@ -214,6 +219,7 @@ public:
     bool supportsDisplayDriver() const override { return false; }
     std::shared_ptr<tt::hal::display::DisplayDriver> _Nullable getDisplayDriver() override { return nullptr; }
 
-    /** Force the next flush to use a specific refresh mode (one-shot) */
+    /** Sets the refresh mode used for automatic (non-full) refreshes from now on,
+     * until changed again by a subsequent call. */
     void setRefreshMode(RefreshMode mode) { currentRefreshMode = mode; }
 };

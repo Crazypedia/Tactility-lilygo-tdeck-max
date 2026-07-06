@@ -172,12 +172,12 @@ void Cst66xxTouch::handleBezelKey(uint8_t keyId, bool pressed) {
         case BEZEL_KEY_HEART: // Back: stop the current app (no-op at the launcher root)
             tt::app::stop();
             break;
-        case BEZEL_KEY_SPEECH: // Home: the launcher
-            tt::app::start("Launcher");
-            break;
-        case BEZEL_KEY_AIRPLANE: // Recents: the app switcher
-            tt::app::start("AppList");
-            break;
+        // Home (BEZEL_KEY_SPEECH) and Recents (BEZEL_KEY_AIRPLANE) are intentionally
+        // unbound: tt::app::start() always pushes a new instance onto the app
+        // stack, so repeated presses would keep growing it (Launcher/AppList
+        // instances never get cleaned up) and leak memory over time. The app
+        // stack has no API yet to collapse back to an existing instance instead
+        // of pushing a new one; wire these up once that exists.
         default:
             break;
     }

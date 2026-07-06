@@ -33,27 +33,42 @@ constexpr uint8_t CMD_FAST_MODE_TIMING = 0xE5;
 constexpr uint8_t DEEP_SLEEP_CHECK_CODE = 0xA5;
 }
 
-void Gdeq031t10Display::writeCommand(uint8_t command) {
+bool Gdeq031t10Display::writeCommand(uint8_t command) {
     gpio_set_level(configuration->pinDc, 0);
     spi_transaction_t transaction = {};
     transaction.length = 8;
     transaction.tx_buffer = &command;
-    spi_device_polling_transmit(spiDevice, &transaction);
+    if (spi_device_polling_transmit(spiDevice, &transaction) != ESP_OK) {
+        LOG_E(TAG, "SPI command transfer failed");
+        return false;
+    }
+    return true;
 }
 
-void Gdeq031t10Display::writeData(const uint8_t* data, size_t length) {
+bool Gdeq031t10Display::writeData(const uint8_t* data, size_t length) {
     gpio_set_level(configuration->pinDc, 1);
     spi_transaction_t transaction = {};
     transaction.length = length * 8;
     transaction.tx_buffer = data;
-    spi_device_polling_transmit(spiDevice, &transaction);
+    if (spi_device_polling_transmit(spiDevice, &transaction) != ESP_OK) {
+        LOG_E(TAG, "SPI data transfer failed");
+        return false;
+    }
+    return true;
 }
 
-void Gdeq031t10Display::waitWhileBusy() const {
+bool Gdeq031t10Display::waitWhileBusy() const {
     // BUSY pin reads high when the controller is idle/ready.
+    constexpr TickType_t timeout = pdMS_TO_TICKS(5000);
+    const TickType_t start = xTaskGetTickCount();
     while (gpio_get_level(configuration->pinBusy) != 1) {
+        if (xTaskGetTickCount() - start > timeout) {
+            LOG_E(TAG, "Timed out waiting for panel BUSY");
+            return false;
+        }
         vTaskDelay(pdMS_TO_TICKS(2));
     }
+    return true;
 }
 
 void Gdeq031t10Display::reset() const {
@@ -63,68 +78,105 @@ void Gdeq031t10Display::reset() const {
     vTaskDelay(pdMS_TO_TICKS(10));
 }
 
-void Gdeq031t10Display::initFull() {
+bool Gdeq031t10Display::initFull() {
     reset();
-    writeCommand(CMD_PANEL_SETTING);
-    writeData(configuration->mirror180 ? 0x13 : 0x1F);
-    writeCommand(CMD_POWER_ON);
-    waitWhileBusy();
+    bool ok = writeCommand(CMD_PANEL_SETTING);
+    ok = ok && writeData(configuration->mirror180 ? 0x13 : 0x1F);
+    ok = ok && writeCommand(CMD_POWER_ON);
+    ok = ok && waitWhileBusy();
+    if (!ok) {
+        LOG_E(TAG, "Full init failed");
+        return false;
+    }
     panelMode = RefreshMode::Full;
     panelPowerOn = true;
+    return true;
 }
 
-void Gdeq031t10Display::initFast() {
-    initFull();
-    writeCommand(CMD_FAST_MODE_ENABLE);
-    writeData(0x02);
-    writeCommand(CMD_FAST_MODE_TIMING);
-    writeData(0x5A); // ~1.0s
+bool Gdeq031t10Display::initFast() {
+    if (!initFull()) {
+        return false;
+    }
+    bool ok = writeCommand(CMD_FAST_MODE_ENABLE);
+    ok = ok && writeData(0x02);
+    ok = ok && writeCommand(CMD_FAST_MODE_TIMING);
+    ok = ok && writeData(0x5A); // ~1.0s
+    if (!ok) {
+        LOG_E(TAG, "Fast mode init failed");
+        return false;
+    }
     panelMode = RefreshMode::Fast;
+    return true;
 }
 
-void Gdeq031t10Display::initSlow() {
-    initFull();
-    writeCommand(CMD_FAST_MODE_ENABLE);
-    writeData(0x02);
-    writeCommand(CMD_FAST_MODE_TIMING);
-    writeData(0x6E); // ~1.5s
+bool Gdeq031t10Display::initSlow() {
+    if (!initFull()) {
+        return false;
+    }
+    bool ok = writeCommand(CMD_FAST_MODE_ENABLE);
+    ok = ok && writeData(0x02);
+    ok = ok && writeCommand(CMD_FAST_MODE_TIMING);
+    ok = ok && writeData(0x6E); // ~1.5s
+    if (!ok) {
+        LOG_E(TAG, "Slow mode init failed");
+        return false;
+    }
     panelMode = RefreshMode::Slow;
+    return true;
 }
 
-void Gdeq031t10Display::initPartial() {
-    initFull();
-    writeCommand(CMD_FAST_MODE_ENABLE);
-    writeData(0x02);
-    writeCommand(CMD_FAST_MODE_TIMING);
-    writeData(0x79);
-    writeCommand(CMD_VCOM_DATA_INTERVAL);
-    writeData(0xD7);
+bool Gdeq031t10Display::initPartial() {
+    if (!initFull()) {
+        return false;
+    }
+    bool ok = writeCommand(CMD_FAST_MODE_ENABLE);
+    ok = ok && writeData(0x02);
+    ok = ok && writeCommand(CMD_FAST_MODE_TIMING);
+    ok = ok && writeData(0x79);
+    ok = ok && writeCommand(CMD_VCOM_DATA_INTERVAL);
+    ok = ok && writeData(0xD7);
+    if (!ok) {
+        LOG_E(TAG, "Partial mode init failed");
+        return false;
+    }
     panelMode = RefreshMode::Partial;
+    return true;
 }
 
-void Gdeq031t10Display::ensurePanelReady(RefreshMode mode) {
+bool Gdeq031t10Display::ensurePanelReady(RefreshMode mode) {
     if (panelMode != mode) {
         // A mode change needs the full init path: it starts with reset(), which
         // restores register defaults (required when leaving partial mode, whose
         // VCOM/data-interval setting would otherwise linger).
         switch (mode) {
-            case RefreshMode::Full: initFull(); break;
-            case RefreshMode::Fast: initFast(); break;
-            case RefreshMode::Slow: initSlow(); break;
-            case RefreshMode::Partial: initPartial(); break;
+            case RefreshMode::Full: return initFull();
+            case RefreshMode::Fast: return initFast();
+            case RefreshMode::Slow: return initSlow();
+            case RefreshMode::Partial: return initPartial();
         }
+        return false;
     } else if (!panelPowerOn) {
         // Registers still hold the mode; only the charge pump was idled.
-        writeCommand(CMD_POWER_ON);
-        waitWhileBusy();
+        if (!writeCommand(CMD_POWER_ON) || !waitWhileBusy()) {
+            LOG_E(TAG, "Panel did not become ready after power-on");
+            return false;
+        }
         panelPowerOn = true;
     }
+    return true;
 }
 
-void Gdeq031t10Display::powerOff() {
-    writeCommand(CMD_POWER_ON_OFF); // 0x02 standalone = power off
-    waitWhileBusy();
+bool Gdeq031t10Display::powerOff() {
+    // Command the panel off regardless of whether BUSY confirms it: retrying
+    // forever here would just as likely hang, and a stuck-BUSY panel is
+    // already unusable either way.
+    bool ok = writeCommand(CMD_POWER_ON_OFF); // 0x02 standalone = power off
+    if (!ok || !waitWhileBusy()) {
+        LOG_E(TAG, "Panel did not confirm power-off");
+        ok = false;
+    }
     panelPowerOn = false;
+    return ok;
 }
 
 void Gdeq031t10Display::queueRefresh() {
@@ -220,7 +272,7 @@ void Gdeq031t10Display::refresh() {
     if (forceFullRefresh || largeChange || nothingChanged) {
         // Explicit requests get the best-quality LUT; automatic ghost-clears use
         // the configured (typically faster) mode.
-        refreshFull(forceFullRefresh ? RefreshMode::Full : currentRefreshMode);
+        refreshFull(forceFullRefresh ? RefreshMode::Full : currentRefreshMode.load());
         forceFullRefresh = false;
         partialRefreshCount = 0;
         ghostAreaValid = false;
@@ -266,30 +318,45 @@ void Gdeq031t10Display::refresh() {
 }
 
 void Gdeq031t10Display::refreshFull(RefreshMode mode) {
-    ensurePanelReady(mode);
+    if (!ensurePanelReady(mode)) {
+        LOG_E(TAG, "Skipping full refresh: panel not ready");
+        return;
+    }
 
     const uint8_t* renderBitmap = taskFramebuffer.get();
 
     // shadowFramebuffer keeps the panel-polarity copy of the last frame for the
     // controller's old/new differential refresh; LVGL's I1 polarity is inverted.
-    writeCommand(CMD_DATA_START_OLD);
-    writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE);
+    if (!writeCommand(CMD_DATA_START_OLD) || !writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE)) {
+        LOG_E(TAG, "Failed to send old frame data");
+        return;
+    }
 
     for (size_t i = 0; i < FRAMEBUFFER_SIZE; i++) {
         shadowFramebuffer[i] = static_cast<uint8_t>(~renderBitmap[i]);
     }
-    writeCommand(CMD_DATA_START_NEW);
-    writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE);
+    if (!writeCommand(CMD_DATA_START_NEW) || !writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE)) {
+        LOG_E(TAG, "Failed to send new frame data");
+        return;
+    }
 
-    writeCommand(CMD_DISPLAY_REFRESH);
+    if (!writeCommand(CMD_DISPLAY_REFRESH)) {
+        LOG_E(TAG, "Failed to trigger display refresh");
+        return;
+    }
     vTaskDelay(pdMS_TO_TICKS(1)); // datasheet requires >=200us settle before polling BUSY
-    waitWhileBusy();
+    if (!waitWhileBusy()) {
+        LOG_E(TAG, "Full refresh did not complete");
+    }
 }
 
 void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow, bool scrubGhosts) {
     // Partial LUT (fast waveform via temperature force) on a sub-region only. The
     // RAM window must be byte-aligned in X, which it already is (byte columns).
-    ensurePanelReady(RefreshMode::Partial);
+    if (!ensurePanelReady(RefreshMode::Partial)) {
+        LOG_E(TAG, "Skipping window refresh: panel not ready");
+        return;
+    }
 
     const uint8_t* renderBitmap = taskFramebuffer.get();
     constexpr int BYTES_PER_ROW = WIDTH / 8;
@@ -301,15 +368,20 @@ void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int fir
     const uint16_t ye = static_cast<uint16_t>(lastRow);
 
     // Set the partial RAM window (GxEPD2 GDEQ031T10 sequence).
-    writeCommand(CMD_PARTIAL_IN);
-    writeCommand(CMD_PARTIAL_WINDOW);
-    writeData(static_cast<uint8_t>(x));
-    writeData(static_cast<uint8_t>(xe));
-    writeData(static_cast<uint8_t>(y >> 8));
-    writeData(static_cast<uint8_t>(y & 0xFF));
-    writeData(static_cast<uint8_t>(ye >> 8));
-    writeData(static_cast<uint8_t>(ye & 0xFF));
-    writeData(0x01);
+    bool ok = writeCommand(CMD_PARTIAL_IN);
+    ok = ok && writeCommand(CMD_PARTIAL_WINDOW);
+    ok = ok && writeData(static_cast<uint8_t>(x));
+    ok = ok && writeData(static_cast<uint8_t>(xe));
+    ok = ok && writeData(static_cast<uint8_t>(y >> 8));
+    ok = ok && writeData(static_cast<uint8_t>(y & 0xFF));
+    ok = ok && writeData(static_cast<uint8_t>(ye >> 8));
+    ok = ok && writeData(static_cast<uint8_t>(ye & 0xFF));
+    ok = ok && writeData(0x01);
+    if (!ok) {
+        LOG_E(TAG, "Failed to set partial refresh window");
+        writeCommand(CMD_PARTIAL_OUT); // best-effort: leave partial-window mode
+        return;
+    }
 
     // Old region: normally the region's current panel contents (shadow),
     // gathered contiguously. For a ghost scrub, feed the complement of the new
@@ -327,8 +399,11 @@ void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int fir
         }
         n += widthBytes;
     }
-    writeCommand(CMD_DATA_START_OLD);
-    writeData(regionBuffer.get(), n);
+    if (!writeCommand(CMD_DATA_START_OLD) || !writeData(regionBuffer.get(), n)) {
+        LOG_E(TAG, "Failed to send old window data");
+        writeCommand(CMD_PARTIAL_OUT);
+        return;
+    }
 
     // New region: inverted render, and update the shadow for this region as we go.
     n = 0;
@@ -340,12 +415,20 @@ void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int fir
             shadowFramebuffer[base + c] = value;
         }
     }
-    writeCommand(CMD_DATA_START_NEW);
-    writeData(regionBuffer.get(), n);
+    if (!writeCommand(CMD_DATA_START_NEW) || !writeData(regionBuffer.get(), n)) {
+        LOG_E(TAG, "Failed to send new window data");
+        writeCommand(CMD_PARTIAL_OUT);
+        return;
+    }
 
-    writeCommand(CMD_DISPLAY_REFRESH);
-    vTaskDelay(pdMS_TO_TICKS(1));
-    waitWhileBusy();
+    if (writeCommand(CMD_DISPLAY_REFRESH)) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+        if (!waitWhileBusy()) {
+            LOG_E(TAG, "Window refresh did not complete");
+        }
+    } else {
+        LOG_E(TAG, "Failed to trigger window refresh");
+    }
     writeCommand(CMD_PARTIAL_OUT);
 }
 
@@ -430,15 +513,21 @@ bool Gdeq031t10Display::start() {
 
     currentRefreshMode = configuration->defaultRefreshMode;
     initFull();
-    powered = true;
-    initialized = true;
 
     refreshTaskShouldExit = false;
     if (xTaskCreate(&refreshTaskMain, "epd_refresh", REFRESH_TASK_STACK_SIZE, this, REFRESH_TASK_PRIORITY, &refreshTask) != pdPASS) {
         LOG_E(TAG, "Failed to create refresh task");
-        initialized = false;
+        spi_bus_remove_device(spiDevice);
+        spiDevice = nullptr;
+        shadowFramebuffer.reset();
+        renderFramebuffer.reset();
+        regionBuffer.reset();
+        pendingFramebuffer.reset();
+        taskFramebuffer.reset();
         return false;
     }
+    powered = true;
+    initialized = true;
     return true;
 }
 

@@ -4,6 +4,7 @@
 #include <driver/gpio.h>
 
 #include <Tactility/hal/Configuration.h>
+#include <tactility/check.h>
 #include <tactility/delay.h>
 #include <tactility/device.h>
 #include <tactility/drivers/gpio_controller.h>
@@ -79,6 +80,7 @@ static bool initBoot() {
 
 static DeviceVector createDevices() {
     auto* i2c = device_find_by_name("i2c0");
+    check(i2c != nullptr);
 
     // SD card is not created here: it's an espressif,esp32-sdspi node in the
     // devicetree (sdcard@1 under spi0), started by Hal::init's mountAll().
@@ -86,11 +88,9 @@ static DeviceVector createDevices() {
         createDisplay()
     };
 
-    if (i2c != nullptr) {
-        auto keypad = std::make_shared<Tca8418>(i2c);
-        devices.push_back(keypad);
-        devices.push_back(std::make_shared<TdeckmaxKeyboard>(keypad));
-    }
+    auto keypad = std::make_shared<Tca8418>(i2c);
+    devices.push_back(keypad);
+    devices.push_back(std::make_shared<TdeckmaxKeyboard>(keypad));
 
     return devices;
 }

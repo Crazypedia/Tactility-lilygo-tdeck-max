@@ -34,6 +34,11 @@ class TdeckmaxKeyboard final : public tt::hal::keyboard::KeyboardDevice {
     std::unique_ptr<tt::Timer> inputTimer;
     std::unique_ptr<tt::Timer> backlightImpulseTimer;
 
+    bool shiftPressed = false;
+    bool symPressed = false;
+    bool capToggle = false;
+    bool capToggleArmed = true;
+
     bool initBacklight(gpio_num_t pin, uint32_t frequencyHz, ledc_timer_t timer, ledc_channel_t channel);
     void processKeyboard();
     void processBacklightImpulse();

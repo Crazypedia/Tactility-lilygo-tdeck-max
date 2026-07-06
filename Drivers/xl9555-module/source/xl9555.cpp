@@ -28,11 +28,7 @@ static inline uint8_t bit_of(GpioDescriptor* descriptor) {
 
 static error_t start(Device* device) {
     auto* parent = device_get_parent(device);
-    if (device_get_type(parent) != &I2C_CONTROLLER_TYPE) {
-        LOG_E(TAG, "Parent device is not I2C");
-        return ERROR_RESOURCE;
-    }
-    LOG_I(TAG, "Started XL9555 device %s", device->name);
+    check(device_get_type(parent) == &I2C_CONTROLLER_TYPE);
 
     return gpio_controller_init_descriptors(device, 16, nullptr);
 }
@@ -51,11 +47,15 @@ static error_t set_level(GpioDescriptor* descriptor, bool high) {
     auto reg = static_cast<uint8_t>(XL9555_REGISTER_OUTPUT_PORT0 + port_of(descriptor));
     auto bit = bit_of(descriptor);
 
-    if (high) {
-        return i2c_controller_register8_set_bits(parent, address, reg, bit, portMAX_DELAY);
-    } else {
-        return i2c_controller_register8_reset_bits(parent, address, reg, bit, portMAX_DELAY);
-    }
+    // i2c_controller_register8_{set,reset}_bits() do a separate read then
+    // write; without this lock, concurrent updates to different pins on the
+    // same output port register can clobber each other.
+    device_lock(device);
+    error_t err = high
+        ? i2c_controller_register8_set_bits(parent, address, reg, bit, portMAX_DELAY)
+        : i2c_controller_register8_reset_bits(parent, address, reg, bit, portMAX_DELAY);
+    device_unlock(device);
+    return err;
 }
 
 static error_t get_level(GpioDescriptor* descriptor, bool* high) {
@@ -81,6 +81,13 @@ static error_t set_flags(GpioDescriptor* descriptor, gpio_flags_t flags) {
         return ERROR_NOT_SUPPORTED;
     }
 
+    // The polarity register only inverts what's read back from an input pin;
+    // set_level() still drives outputs at the raw level. Accepting ACTIVE_LOW
+    // on an output would silently not do what it implies.
+    if ((flags & GPIO_FLAG_ACTIVE_LOW) && (flags & GPIO_FLAG_DIRECTION_OUTPUT)) {
+        return ERROR_NOT_SUPPORTED;
+    }
+
     auto* device = descriptor->controller;
     auto* parent = device_get_parent(device);
     auto address = GET_CONFIG(device)->address;
@@ -88,6 +95,11 @@ static error_t set_flags(GpioDescriptor* descriptor, gpio_flags_t flags) {
     auto polarity_reg = static_cast<uint8_t>(XL9555_REGISTER_POLARITY_PORT0 + port_of(descriptor));
     auto bit = bit_of(descriptor);
     error_t err;
+
+    // Locked as a whole: direction and polarity are two separate RMW register
+    // writes, and both should apply atomically with respect to other set_flags
+    // / set_level calls on this device.
+    device_lock(device);
 
     // Direction: configuration bit is 1 for input, 0 for output.
     if (flags & GPIO_FLAG_DIRECTION_OUTPUT) {
@@ -97,6 +109,7 @@ static error_t set_flags(GpioDescriptor* descriptor, gpio_flags_t flags) {
     }
 
     if (err != ERROR_NONE) {
+        device_unlock(device);
         return err;
     }
 
@@ -107,6 +120,7 @@ static error_t set_flags(GpioDescriptor* descriptor, gpio_flags_t flags) {
         err = i2c_controller_register8_reset_bits(parent, address, polarity_reg, bit, portMAX_DELAY);
     }
 
+    device_unlock(device);
     return err;
 }
 

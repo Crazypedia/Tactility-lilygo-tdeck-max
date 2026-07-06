@@ -79,10 +79,6 @@ void TdeckmaxKeyboard::readCallback(lv_indev_t* indev, lv_indev_data_t* data) {
 }
 
 void TdeckmaxKeyboard::processKeyboard() {
-    static bool shift_pressed = false;
-    static bool sym_pressed = false;
-    static bool cap_toggle = false;
-    static bool cap_toggle_armed = true;
     bool anykey_pressed = false;
 
     // Each update() pops one event from the TCA8418's FIFO. Drain it fully per
@@ -97,10 +93,10 @@ void TdeckmaxKeyboard::processKeyboard() {
             auto vcol = (KB_COLS - 1) - keypad->released_list[0].col;
 
             if ((row == 2) && (vcol == 0)) {
-                shift_pressed = false; // ALT key
+                shiftPressed = false; // ALT key
             }
             if ((row == 3) && (vcol == 8)) {
-                sym_pressed = false; // SYM key
+                symPressed = false; // SYM key
             }
         } else if (keypad->pressed_key_count > 0) {
             // Press event: the key that caused it is the newest list entry.
@@ -109,30 +105,35 @@ void TdeckmaxKeyboard::processKeyboard() {
             anykey_pressed = true;
 
             if ((row == 2) && (vcol == 0)) {
-                shift_pressed = true; // ALT key
+                shiftPressed = true; // ALT key
             } else if ((row == 3) && (vcol == 8)) {
-                sym_pressed = true; // SYM key
+                symPressed = true; // SYM key
             } else {
                 char chr;
-                if (sym_pressed) {
+                if (symPressed) {
                     chr = keymap_sy[row][vcol];
-                } else if (shift_pressed || cap_toggle) {
+                } else if (shiftPressed || capToggle) {
                     chr = keymap_uc[row][vcol];
                 } else {
                     chr = keymap_lc[row][vcol];
                 }
 
-                if (chr != '\0') xQueueSend(queue, &chr, 50 / portTICK_PERIOD_MS);
+                // Non-blocking: this runs on the periodic input timer, so a full
+                // queue (reader stalled) must drop the keystroke rather than
+                // stall this callback and the timer's other periodic work.
+                if (chr != '\0' && xQueueSend(queue, &chr, 0) != pdPASS) {
+                    LOG_W(TAG, "Keyboard queue full, dropping keystroke");
+                }
             }
 
-            if ((sym_pressed && shift_pressed) && cap_toggle_armed) {
-                cap_toggle = !cap_toggle;
-                cap_toggle_armed = false;
+            if ((symPressed && shiftPressed) && capToggleArmed) {
+                capToggle = !capToggle;
+                capToggleArmed = false;
             }
         }
 
-        if ((!sym_pressed && !shift_pressed) && !cap_toggle_armed) {
-            cap_toggle_armed = true;
+        if ((!symPressed && !shiftPressed) && !capToggleArmed) {
+            capToggleArmed = true;
         }
     }
 
@@ -220,6 +221,7 @@ bool TdeckmaxKeyboard::initBacklight(gpio_num_t pin, uint32_t frequencyHz, ledc_
 
     if (ledc_channel_config(&ledc_channel) != ESP_OK) {
         LOG_E(TAG, "Backlight channel config failed");
+        return false;
     }
 
     return true;
