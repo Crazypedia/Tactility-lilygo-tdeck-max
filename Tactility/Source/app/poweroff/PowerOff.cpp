@@ -29,9 +29,11 @@ class PowerOffApp final : public App {
         auto* title = lv_label_create(screen);
         lv_label_set_text(title, "Tactility OS");
         lv_obj_set_style_text_font(title, lvgl_get_text_font(FONT_SIZE_LARGE), 0);
+        lv_obj_set_style_text_color(title, lv_color_black(), 0);
 
         auto* subtitle = lv_label_create(screen);
         lv_label_set_text(subtitle, "Powered off");
+        lv_obj_set_style_text_color(subtitle, lv_color_black(), 0);
 
         lv_screen_load(screen);
 
