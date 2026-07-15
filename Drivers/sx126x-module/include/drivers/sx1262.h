@@ -11,6 +11,8 @@ extern "C" {
 
 /** Field order must match the property order in bindings/semtech,sx1262.yaml */
 struct Sx1262Config {
+    /** Chip-select index on the parent SPI controller, must match the node's unit address */
+    int32_t reg;
     /** SPI clock frequency in kHz */
     uint32_t spi_frequency_khz;
     /** NRESET line (must be an SoC GPIO) */

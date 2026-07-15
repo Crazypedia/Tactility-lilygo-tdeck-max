@@ -5,7 +5,8 @@ Kernel driver for the Semtech SX1262 sub-GHz LoRa and (G)FSK transceiver, built 
 (see `<tactility/drivers/lora.h>`) that supports LoRa and FSK for TX/RX and LR-FHSS for TX.
 
 The device is a child of an SPI controller. The chip-select line comes from the parent's
-`cs-gpios` entry matching the node's unit address. The reset, busy and DIO1 lines must be
+`cs-gpios` entry matching the node's unit address; the `reg` property must match that
+unit address (checked at device start). The reset, busy and DIO1 lines must be
 SoC GPIOs (the RadioLib HAL drives them directly); the optional enable and antenna-select
 lines can live on any GPIO controller, including IO expanders, and are driven to their
 active level while the device is started.
@@ -22,6 +23,7 @@ spi0 {
 
     radio@2 {
         compatible = "semtech,sx1262";
+        reg = <2>;
         pin-reset = <&gpio0 4 GPIO_FLAG_NONE>;
         pin-dio1 = <&gpio0 5 GPIO_FLAG_NONE>;
         pin-busy = <&gpio0 6 GPIO_FLAG_NONE>;

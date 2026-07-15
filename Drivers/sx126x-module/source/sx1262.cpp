@@ -120,14 +120,22 @@ static error_t start(Device* device) {
         return ERROR_INVALID_STATE;
     }
 
+    auto* config = GET_CONFIG(device);
+
+    // The chip-select lookup uses the node's unit address; reg exists to satisfy the
+    // devicetree convention for addressed nodes, so reject a board definition where
+    // the two disagree instead of silently using one of them.
+    if (config->reg != device->address) {
+        LOG_E(TAG, "reg (%d) does not match the node's unit address (%d)", (int)config->reg, (int)device->address);
+        return ERROR_INVALID_STATE;
+    }
+
     // DIO1's interrupt is set up later through the GPIO descriptor callback API
     // (see Sx1262Radio::registerDio1Isr), which installs the shared ISR service
     // on demand and reference-counts it against the other GPIO-interrupt users.
 
     auto* data = new (std::nothrow) Sx1262Internal();
     if (data == nullptr) return ERROR_OUT_OF_MEMORY;
-
-    auto* config = GET_CONFIG(device);
 
     gpio_num_t pin_reset = GPIO_NUM_NC;
     gpio_num_t pin_busy = GPIO_NUM_NC;
@@ -207,7 +215,9 @@ static error_t start(Device* device) {
     // surfacing later as an opaque RadioLib error on the radio thread.
     if (data->radio->probe() != ERROR_NONE) {
         delete data->radio;
+        // Power down first, then release the antenna path (mirror of the start order)
         set_pin_active(data->pin_enable, config->pin_enable, false);
+        set_pin_active(data->pin_antenna_select, config->pin_antenna_select, false);
         data->release_pins();
         delete data;
         return ERROR_RESOURCE;

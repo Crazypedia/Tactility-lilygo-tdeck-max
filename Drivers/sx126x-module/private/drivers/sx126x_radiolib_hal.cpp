@@ -7,8 +7,8 @@
 
 #include <cstring>
 
+#include <esp_rom_gpio.h>
 #include <esp_timer.h>
-#include <hal/gpio_hal.h>
 
 #define TAG "sx126x_hal"
 
@@ -25,17 +25,14 @@ void Sx126xRadiolibHal::pinMode(uint32_t pin, uint32_t mode) {
         return;
     }
 
-    gpio_hal_context_t gpiohal;
-    gpiohal.dev = GPIO_LL_GET_HW(GPIO_PORT_0);
-
-    gpio_config_t conf = {
-        .pin_bit_mask = (1ULL << pin),
-        .mode = (gpio_mode_t)mode,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = (gpio_int_type_t)gpiohal.dev->pin[pin].int_type,
-    };
-    gpio_config(&conf);
+    // Not gpio_config(): that rewrites the pin's interrupt type along with everything
+    // else, and DIO1's HIGH_LEVEL interrupt is owned by the kernel GPIO descriptor API
+    // while RadioLib still calls pinMode() on that pin during begin(). Configure the pad
+    // routing, direction and pulls through the per-aspect setters instead, which leave
+    // the interrupt configuration untouched.
+    esp_rom_gpio_pad_select_gpio(pin);
+    gpio_set_direction((gpio_num_t)pin, (gpio_mode_t)mode);
+    gpio_set_pull_mode((gpio_num_t)pin, GPIO_FLOATING);
 }
 
 void Sx126xRadiolibHal::digitalWrite(uint32_t pin, uint32_t value) {

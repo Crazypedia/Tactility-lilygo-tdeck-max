@@ -5,6 +5,10 @@ compatible: "semtech,sx1262"
 bus: spi
 
 properties:
+  reg:
+    type: int
+    required: true
+    description: Chip-select index on the parent SPI controller, must match the node's unit address
   spi-frequency-khz:
     type: int
     default: 4000

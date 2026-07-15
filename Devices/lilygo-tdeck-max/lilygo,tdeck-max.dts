@@ -69,6 +69,7 @@
 		// gated by the XL9555 IO expander.
 		radio@2 {
 			compatible = "semtech,sx1262";
+			reg = <2>;
 			pin-reset = <&gpio0 4 GPIO_FLAG_NONE>;
 			pin-dio1 = <&gpio0 5 GPIO_FLAG_NONE>;
 			pin-busy = <&gpio0 6 GPIO_FLAG_NONE>;

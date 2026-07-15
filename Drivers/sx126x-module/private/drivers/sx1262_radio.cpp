@@ -242,12 +242,14 @@ int32_t Sx1262Radio::threadMain() {
             break;
         }
 
+        // Service a received packet before deciding to transmit: an RX-done and a
+        // queued TX can coincide in the same iteration, and dropping the RX here would
+        // lose the packet outright.
+        if (hasRx) {
+            doReceive();
+        }
         if (getTxQueueSize() > 0) {
             doTransmit();
-        } else {
-            if (hasRx) {
-                doReceive();
-            }
         }
     }
 
@@ -863,8 +865,11 @@ void Sx1262Radio::doTransmit() {
         // Clean up after transmission
         radio.finishTransmit();
 
-        // Thread might've been interrupted in the meanwhile
+        // Thread might've been interrupted in the meanwhile. Publish a terminal state so a
+        // caller that queued this TX still gets a final callback for its id when
+        // setEnabled(false) races with an in-flight transmit.
         if (isThreadInterrupted()) {
+            publishTx(currentTx.id, LORA_TRANSMISSION_STATE_ERROR);
             return;
         }
 
