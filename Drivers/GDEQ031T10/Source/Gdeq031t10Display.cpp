@@ -318,6 +318,19 @@ void Gdeq031t10Display::refresh() {
 }
 
 void Gdeq031t10Display::refreshFull(RefreshMode mode) {
+    // Periodic ground-truth resync: differential modes (below) trust that
+    // shadowFramebuffer matches the physical panel. If that ever silently
+    // drifts (SPI glitch, supply sag during radio activity), the mismatch is
+    // invisible to the change detector in refresh() and would otherwise
+    // persist forever. The Full LUT redraws every pixel unconditionally, so
+    // escalating periodically bounds the damage to a few refresh cycles.
+    if (mode != RefreshMode::Full && ++fullRefreshesSinceResync >= FULL_RESYNC_INTERVAL) {
+        mode = RefreshMode::Full;
+    }
+    if (mode == RefreshMode::Full) {
+        fullRefreshesSinceResync = 0;
+    }
+
     if (!ensurePanelReady(mode)) {
         LOG_E(TAG, "Skipping full refresh: panel not ready");
         return;
@@ -332,10 +345,18 @@ void Gdeq031t10Display::refreshFull(RefreshMode mode) {
         return;
     }
 
+    // Build the new shadow in a temporary buffer rather than shadowFramebuffer
+    // directly: if the panel never confirms this refresh (BUSY timeout below),
+    // shadowFramebuffer must keep reflecting what the panel actually shows.
+    // Committing early here was the root cause of the shadow desync bug: a
+    // failed refresh would still leave the shadow claiming success, so the
+    // next refresh's change-detection would diff against a lie and could skip
+    // pixels the panel never received.
+    std::unique_ptr<uint8_t[]> newShadow = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
     for (size_t i = 0; i < FRAMEBUFFER_SIZE; i++) {
-        shadowFramebuffer[i] = static_cast<uint8_t>(~renderBitmap[i]);
+        newShadow[i] = static_cast<uint8_t>(~renderBitmap[i]);
     }
-    if (!writeCommand(CMD_DATA_START_NEW) || !writeData(shadowFramebuffer.get(), FRAMEBUFFER_SIZE)) {
+    if (!writeCommand(CMD_DATA_START_NEW) || !writeData(newShadow.get(), FRAMEBUFFER_SIZE)) {
         LOG_E(TAG, "Failed to send new frame data");
         return;
     }
@@ -347,7 +368,15 @@ void Gdeq031t10Display::refreshFull(RefreshMode mode) {
     vTaskDelay(pdMS_TO_TICKS(1)); // datasheet requires >=200us settle before polling BUSY
     if (!waitWhileBusy()) {
         LOG_E(TAG, "Full refresh did not complete");
+        // The panel's actual state is now unknown. Leave shadowFramebuffer
+        // untouched and force the next refresh to resend unconditionally
+        // instead of trusting a diff against a shadow that may not match.
+        forceFullRefresh = true;
+        return;
     }
+
+    // Panel confirmed the refresh; the shadow now safely reflects reality.
+    std::memcpy(shadowFramebuffer.get(), newShadow.get(), FRAMEBUFFER_SIZE);
 }
 
 void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int firstRow, int lastRow, bool scrubGhosts) {
@@ -405,14 +434,20 @@ void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int fir
         return;
     }
 
-    // New region: inverted render, and update the shadow for this region as we go.
+    // New region: inverted render. As in refreshFull(), stage the shadow update
+    // in a copy rather than mutating shadowFramebuffer directly, and only
+    // commit it once the panel confirms the refresh — otherwise a failed
+    // window refresh would leave the shadow claiming pixels were updated that
+    // the panel never actually received.
+    std::unique_ptr<uint8_t[]> newShadow = std::make_unique<uint8_t[]>(FRAMEBUFFER_SIZE);
+    std::memcpy(newShadow.get(), shadowFramebuffer.get(), FRAMEBUFFER_SIZE);
     n = 0;
     for (int row = firstRow; row <= lastRow; row++) {
         const size_t base = static_cast<size_t>(row) * BYTES_PER_ROW + firstByteCol;
         for (int c = 0; c < widthBytes; c++) {
             const uint8_t value = static_cast<uint8_t>(~renderBitmap[base + c]);
             regionBuffer[n++] = value;
-            shadowFramebuffer[base + c] = value;
+            newShadow[base + c] = value;
         }
     }
     if (!writeCommand(CMD_DATA_START_NEW) || !writeData(regionBuffer.get(), n)) {
@@ -425,11 +460,21 @@ void Gdeq031t10Display::refreshWindow(int firstByteCol, int lastByteCol, int fir
         vTaskDelay(pdMS_TO_TICKS(1));
         if (!waitWhileBusy()) {
             LOG_E(TAG, "Window refresh did not complete");
+            writeCommand(CMD_PARTIAL_OUT);
+            // Panel state is now unknown; leave shadowFramebuffer untouched
+            // and force a full resend rather than trusting a stale diff.
+            forceFullRefresh = true;
+            return;
         }
     } else {
         LOG_E(TAG, "Failed to trigger window refresh");
+        writeCommand(CMD_PARTIAL_OUT);
+        return;
     }
     writeCommand(CMD_PARTIAL_OUT);
+
+    // Panel confirmed the refresh; the shadow now safely reflects reality.
+    std::memcpy(shadowFramebuffer.get(), newShadow.get(), FRAMEBUFFER_SIZE);
 }
 
 void Gdeq031t10Display::flushCallback(lv_display_t* display, const lv_area_t* area, uint8_t* pixelMap) {

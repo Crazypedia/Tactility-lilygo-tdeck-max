@@ -97,6 +97,15 @@ private:
     /** Scratch buffer used to gather a windowed region's bytes for one SPI write. */
     std::unique_ptr<uint8_t[]> regionBuffer;
     static constexpr uint8_t MAX_PARTIAL_REFRESHES = 8;
+    /** Number of automatic (differential-mode) full refreshes since the last
+     * true Full-LUT refresh. Differential refreshes trust shadowFramebuffer to
+     * match the physical panel; if they ever diverge (SPI glitch, supply
+     * transient), the drift is invisible to the change detector and would
+     * persist forever. Every FULL_RESYNC_INTERVAL-th full refresh escalates to
+     * the Full LUT, which redraws every pixel unconditionally, bounding the
+     * damage to a few refresh cycles. */
+    uint8_t fullRefreshesSinceResync = 0;
+    static constexpr uint8_t FULL_RESYNC_INTERVAL = 4;
     /** Union bounding box (byte-column/row space) of all windowed partial
      * refreshes since the last ghost-clear. When the partial-refresh gate
      * expires, this decides between a localized scrub and a full-screen
